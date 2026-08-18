@@ -1,43 +1,26 @@
-# pintam2
+# pintam2 v0.3
 
-Primera base de la aplicación PintaM² desarrollada en Flutter.
+Versión de prueba navegable con PDF real y compartir.
 
-## Primer objetivo
+## Funciona en esta versión
 
-Construir la pantalla de Inicio y luego conectar:
+- Inicio
+- Clientes
+- Ficha de cliente
+- Presupuestos
+- Plantillas
+- Calculadora
+- Modo claro / oscuro / sistema
+- Flujo Nuevo presupuesto
+- Vista previa real del PDF
+- Generación de PDF
+- Compartir PDF con el menú de Android (incluye WhatsApp si está instalado)
+- Guardar / imprimir mediante el diálogo del sistema
 
-1. Clientes
-2. Obras
-3. Nuevo presupuesto
-4. Medidas
-5. Trabajos
-6. Materiales
-7. Resumen
-8. PDF
+## Importante
 
-## Ejecutar
+El botón "Enviar por WhatsApp" abre el menú de compartir de Android con el PDF adjunto.
+Si WhatsApp está instalado, se puede elegir desde ese menú.
 
-Con Flutter instalado:
-
-```bash
-flutter pub get
-flutter run
-```
-
-Para Android:
-
-```bash
-flutter run
-```
-
-Para Windows:
-
-```bash
-flutter run -d windows
-```
-
-Para iOS se requiere macOS + Xcode:
-
-```bash
-flutter run -d ios
-```
+Los datos todavía son de demostración y no se guardan de forma permanente.
+La base de datos local será el próximo módulo.
