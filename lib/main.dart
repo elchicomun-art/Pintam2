@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -99,6 +100,7 @@ class _PintaM2AppState extends State<PintaM2App> {
             );
           }
 
+          if (!_store.setupDone) return SetupScreen(store: _store);
           return MainShell(
             store: _store,
             onThemeChanged: (mode) => setState(() => _themeMode = mode),
@@ -204,10 +206,19 @@ class BudgetData {
 class AppStore extends ChangeNotifier {
   static const _clientsKey = 'pintam2_clients_v2';
   static const _budgetsKey = 'pintam2_budgets_v1';
+  static const _profileKey = 'pintam2_profile_v1';
 
   bool loaded = false;
   final List<ClientData> clients = [];
   final List<BudgetData> budgets = [];
+  bool setupDone = false;
+  String userName = '';
+  String companyName = '';
+  String logoBase64 = '';
+  Map<String,double> prices = {
+    'Pintura interior':0, 'Pintura exterior':0, 'Pintura rápida':0,
+    'Barniz':0, 'Esmalte sintético':0, 'Membrana líquida':0,
+  };
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -248,6 +259,18 @@ class AppStore extends ChangeNotifier {
       }
     }
 
+    final profileRaw = prefs.getString(_profileKey);
+    if (profileRaw != null && profileRaw.isNotEmpty) {
+      try {
+        final m = Map<String,dynamic>.from(jsonDecode(profileRaw));
+        setupDone = m['setupDone'] == true;
+        userName = (m['userName'] ?? '').toString();
+        companyName = (m['companyName'] ?? '').toString();
+        logoBase64 = (m['logoBase64'] ?? '').toString();
+        final pp = m['prices'];
+        if (pp is Map) prices = pp.map((k,v)=>MapEntry(k.toString(), (v as num?)?.toDouble() ?? 0));
+      } catch (_) {}
+    }
     loaded = true;
     notifyListeners();
   }
@@ -301,6 +324,23 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateClient({required String id, required String name, required String address, String phone = ''}) async {
+    final i = clients.indexWhere((c) => c.id == id);
+    if (i >= 0) {
+      clients[i] = ClientData(id:id, name:name.trim(), address:address.trim(), phone:phone.trim());
+      await _saveClients(); notifyListeners();
+    }
+  }
+
+  Future<void> saveProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_profileKey, jsonEncode({
+      'setupDone':setupDone, 'userName':userName, 'companyName':companyName,
+      'logoBase64':logoBase64, 'prices':prices,
+    }));
+    notifyListeners();
+  }
+
   String nextBudgetNumber() {
     final now = DateTime.now();
     final n = budgets.length + 1;
@@ -332,6 +372,21 @@ class BudgetDraft {
     this.notes = '',
     this.total = '',
   });
+}
+
+
+class SetupScreen extends StatefulWidget {
+  final AppStore store; final bool editing;
+  const SetupScreen({super.key, required this.store, this.editing=false});
+  @override State<SetupScreen> createState()=>_SetupScreenState();
+}
+class _SetupScreenState extends State<SetupScreen> {
+  int step=0; late TextEditingController name,company; late Map<String,TextEditingController> prices;
+  @override void initState(){super.initState();name=TextEditingController(text:widget.store.userName);company=TextEditingController(text:widget.store.companyName);prices={for(final e in widget.store.prices.entries)e.key:TextEditingController(text:e.value==0?'':e.value.toStringAsFixed(0))};}
+  Future<void> pickLogo() async {final x=await ImagePicker().pickImage(source:ImageSource.gallery,imageQuality:70,maxWidth:800);if(x!=null){widget.store.logoBase64=base64Encode(await x.readAsBytes());setState((){});}}
+  Future<void> save() async {widget.store.userName=name.text.trim();widget.store.companyName=company.text.trim();widget.store.prices={for(final e in prices.entries)e.key:double.tryParse(e.value.text.replaceAll(',','.'))??0};widget.store.setupDone=true;await widget.store.saveProfile();if(widget.editing&&mounted)Navigator.pop(context);}
+  void next(){if(step<3)setState(()=>step++);else save();}
+  @override Widget build(BuildContext context){final titles=['Tu nombre','Tu empresa','Logo','Precios por m²'];return Scaffold(appBar:AppBar(title:Text(widget.editing?'Editar datos':'Configurar PintaM²')),body:Column(children:[LinearProgressIndicator(value:(step+1)/4),Expanded(child:ListView(padding:const EdgeInsets.all(20),children:[Text(titles[step],style:const TextStyle(fontSize:25,fontWeight:FontWeight.w800)),const SizedBox(height:14),if(step==0)TextField(controller:name,decoration:const InputDecoration(labelText:'Nombre del usuario')),if(step==1)TextField(controller:company,decoration:const InputDecoration(labelText:'Nombre de la empresa')),if(step==2)...[if(widget.store.logoBase64.isNotEmpty)Center(child:Image.memory(base64Decode(widget.store.logoBase64),height:110)),OutlinedButton.icon(onPressed:pickLogo,icon:const Icon(Icons.image_outlined),label:const Text('Elegir logo'))],if(step==3)...[const Text('Completá el precio al lado de cada trabajo. Podés dejarlo vacío.'),const SizedBox(height:10),...prices.entries.map((e)=>Padding(padding:const EdgeInsets.only(bottom:10),child:TextField(controller:e.value,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(labelText:e.key,prefixText:'\$ ',suffixText:'/m²')))),OutlinedButton.icon(onPressed:(){final c=TextEditingController();showDialog(context:context,builder:(d)=>AlertDialog(title:const Text('Otro trabajo'),content:TextField(controller:c,decoration:const InputDecoration(labelText:'Nombre del trabajo')),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Cancelar')),FilledButton(onPressed:(){if(c.text.trim().isNotEmpty)setState(()=>prices[c.text.trim()]=TextEditingController());Navigator.pop(d);},child:const Text('Agregar'))]));},icon:const Icon(Icons.add),label:const Text('Otro'))]])),SafeArea(child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[Expanded(child:TextButton(onPressed:next,child:const Text('Omitir'))),const SizedBox(width:8),Expanded(child:FilledButton(onPressed:next,child:Text(step==3?'Guardar':'Continuar')))]))) ]));}
 }
 
 class MainShell extends StatefulWidget {
@@ -772,6 +827,8 @@ class _ClientsScreenState extends State<ClientsScreen> {
                       if (client.phone.isNotEmpty) client.phone,
                     ].join('\n'),
                   ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _clientActions(client),
                 ),
               ),
             ),
@@ -779,6 +836,25 @@ class _ClientsScreenState extends State<ClientsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _clientActions(ClientData client) async {
+    await showModalBottomSheet(context: context, showDragHandle: true, builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      ListTile(title: Text(client.name, style: const TextStyle(fontWeight: FontWeight.w800)), subtitle: Text(client.address)),
+      ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Editar'), onTap: () { Navigator.pop(ctx); _editClient(client); }),
+      ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Eliminar'), onTap: () async { Navigator.pop(ctx); final ok = await showDialog<bool>(context: context, builder: (d)=>AlertDialog(title: const Text('Eliminar cliente'), content: Text('¿Querés eliminar a ${client.name}?'), actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Eliminar'))])); if(ok==true) await widget.store.deleteClient(client.id); }),
+    ])));
+  }
+
+  Future<void> _editClient(ClientData client) async {
+    final name=TextEditingController(text:client.name), address=TextEditingController(text:client.address), phone=TextEditingController(text:client.phone);
+    await showModalBottomSheet(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>Padding(padding:EdgeInsets.fromLTRB(20,10,20,20+MediaQuery.of(ctx).viewInsets.bottom),child:Column(mainAxisSize:MainAxisSize.min,children:[
+      const Text('Editar cliente',style:TextStyle(fontSize:21,fontWeight:FontWeight.w800)),const SizedBox(height:14),
+      TextField(controller:name,decoration:const InputDecoration(labelText:'Nombre del cliente')),const SizedBox(height:10),
+      TextField(controller:address,decoration:const InputDecoration(labelText:'Dirección')),const SizedBox(height:10),
+      TextField(controller:phone,decoration:const InputDecoration(labelText:'Teléfono')),const SizedBox(height:16),
+      FilledButton(onPressed:() async { if(name.text.trim().isEmpty)return; await widget.store.updateClient(id:client.id,name:name.text,address:address.text,phone:phone.text); if(ctx.mounted)Navigator.pop(ctx);},child:const Text('Guardar cambios')),
+    ])));
   }
 
   Future<void> _newClient() async {
@@ -1023,7 +1099,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Center(
-                  child: Text(
+                  child: SelectableText(
                     '${area!.toStringAsFixed(2)} m²',
                     style: const TextStyle(
                       fontSize: 30,
@@ -1059,14 +1135,11 @@ class MoreScreen extends StatelessWidget {
         children: [
           Card(
             child: ListTile(
-              leading: const Icon(Icons.dashboard_customize_outlined),
-              title: const Text('Plantillas'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const TemplatesScreen()),
-                );
-              },
+              leading: const Icon(Icons.manage_accounts_outlined),
+              title: const Text('Editar datos'),
+              subtitle: const Text('Usuario, empresa, logo y precios'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SetupScreen(store: store, editing: true))),
             ),
           ),
           Card(
@@ -1178,6 +1251,8 @@ class _NewBudgetFlowState extends State<NewBudgetFlow> {
 
   String selectedWorkType = '';
   bool saveNewClient = false;
+  final Set<String> selectedPresetJobs = {};
+  bool showUser = true, showCompany = true, showLogo = true;
 
   @override
   void initState() {
@@ -1211,7 +1286,7 @@ class _NewBudgetFlowState extends State<NewBudgetFlow> {
 
   void _next() {
     _syncDraft();
-    if (step < 5) {
+    if (step < 7) {
       setState(() => step++);
     }
   }
@@ -1231,6 +1306,7 @@ class _NewBudgetFlowState extends State<NewBudgetFlow> {
     } else if (step == 5) {
       materialsController.clear();
     }
+    // Identidad (paso 6) puede omitirse sin borrar la configuración global.
     _next();
   }
 
@@ -1241,7 +1317,7 @@ class _NewBudgetFlowState extends State<NewBudgetFlow> {
     draft.client = clientController.text.trim();
     draft.place = placeController.text.trim();
     draft.measurements = measurementsController.text.trim();
-    draft.jobs = jobsController.text.trim();
+    draft.jobs = [if (jobsController.text.trim().isNotEmpty) jobsController.text.trim(), ...selectedPresetJobs].join('\n');
     draft.materials = materialsController.text.trim();
     draft.notes = notesController.text.trim();
     draft.total = totalController.text.trim();
@@ -1277,7 +1353,7 @@ class _NewBudgetFlowState extends State<NewBudgetFlow> {
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
       child: Row(
         children: List.generate(
-          7,
+          8,
           (i) => Expanded(
             child: Container(
               height: 5,
@@ -1309,6 +1385,8 @@ class _NewBudgetFlowState extends State<NewBudgetFlow> {
         return _jobsStep();
       case 5:
         return _materialsStep();
+      case 6:
+        return _identityStep();
       default:
         return _summaryStep();
     }
@@ -1552,18 +1630,12 @@ class _NewBudgetFlowState extends State<NewBudgetFlow> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
-          ...presetJobs.map(
-            (job) => Card(
-              child: ListTile(
-                leading: const Icon(Icons.add_circle_outline),
-                title: Text(job),
-                onTap: () {
-                  final current = jobsController.text.trim();
-                  jobsController.text =
-                      current.isEmpty ? '• $job' : '$current\n• $job';
-                },
-              ),
-            ),
+          ...presetJobs.map((job) => Card(child: CheckboxListTile(
+            value: selectedPresetJobs.contains(job),
+            controlAffinity: ListTileControlAffinity.leading,
+            title: Text(job),
+            onChanged: (v) => setState(() { if (v == true) selectedPresetJobs.add(job); else selectedPresetJobs.remove(job); }),
+          ))),
           ),
         ],
       ),
@@ -1587,6 +1659,14 @@ class _NewBudgetFlowState extends State<NewBudgetFlow> {
     );
   }
 
+  Widget _identityStep() {
+    return _screenScaffold(title: 'Datos en el presupuesto', child: Column(children: [
+      SwitchListTile(value: showUser, onChanged:(v)=>setState(()=>showUser=v), title:const Text('Mostrar nombre del usuario'), subtitle:Text(widget.store.userName.isEmpty?'Sin completar':widget.store.userName)),
+      SwitchListTile(value: showCompany, onChanged:(v)=>setState(()=>showCompany=v), title:const Text('Mostrar nombre de la empresa'), subtitle:Text(widget.store.companyName.isEmpty?'Sin completar':widget.store.companyName)),
+      SwitchListTile(value: showLogo, onChanged:(v)=>setState(()=>showLogo=v), title:const Text('Mostrar logo'), subtitle:Text(widget.store.logoBase64.isEmpty?'Sin logo cargado':'Logo cargado')),
+    ]));
+  }
+
   Widget _summaryStep() {
     _syncDraft();
 
@@ -1603,6 +1683,7 @@ class _NewBudgetFlowState extends State<NewBudgetFlow> {
             builder: (_) => BudgetPreviewScreen(
               store: widget.store,
               draft: draft,
+              showUser: showUser, showCompany: showCompany, showLogo: showLogo,
             ),
           ),
         );
@@ -1690,11 +1771,13 @@ class _NewBudgetFlowState extends State<NewBudgetFlow> {
 class BudgetPreviewScreen extends StatefulWidget {
   final AppStore store;
   final BudgetDraft draft;
+  final bool showUser, showCompany, showLogo;
 
   const BudgetPreviewScreen({
     super.key,
     required this.store,
     required this.draft,
+    this.showUser = true, this.showCompany = true, this.showLogo = true,
   });
 
   @override
@@ -1710,6 +1793,10 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
     final blue = PdfColor.fromHex('#2F80ED');
     final lightBlue = PdfColor.fromHex('#EAF3FF');
     final grey = PdfColor.fromHex('#596579');
+    pw.MemoryImage? profileLogo;
+    if (widget.showLogo && widget.store.logoBase64.isNotEmpty) {
+      try { profileLogo = pw.MemoryImage(base64Decode(widget.store.logoBase64)); } catch (_) {}
+    }
 
     pdf.addPage(
       pw.MultiPage(
@@ -1717,15 +1804,20 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
         margin: const pw.EdgeInsets.all(36),
         build: (_) => [
           pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text(
-                'PintaM2',
-                style: pw.TextStyle(
-                  color: blue,
-                  fontSize: 22,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
+              if (profileLogo != null) ...[
+                pw.Container(width: 48, height: 48, child: pw.Image(profileLogo, fit: pw.BoxFit.contain)),
+                pw.SizedBox(width: 10),
+              ],
+              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                if (widget.showCompany && widget.store.companyName.isNotEmpty)
+                  pw.Text(widget.store.companyName, style: pw.TextStyle(color: blue,fontSize: 20,fontWeight: pw.FontWeight.bold)),
+                if (widget.showUser && widget.store.userName.isNotEmpty)
+                  pw.Text(widget.store.userName, style: const pw.TextStyle(fontSize: 10)),
+                if ((!widget.showCompany || widget.store.companyName.isEmpty) && (!widget.showUser || widget.store.userName.isEmpty))
+                  pw.Text('PintaM2', style: pw.TextStyle(color: blue,fontSize: 22,fontWeight: pw.FontWeight.bold)),
+              ]),
               pw.Spacer(),
               pw.Text(
                 'PRESUPUESTO ${d.number}',
