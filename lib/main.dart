@@ -1636,7 +1636,6 @@ class _NewBudgetFlowState extends State<NewBudgetFlow> {
             title: Text(job),
             onChanged: (v) => setState(() { if (v == true) selectedPresetJobs.add(job); else selectedPresetJobs.remove(job); }),
           ))),
-          ),
         ],
       ),
     );
