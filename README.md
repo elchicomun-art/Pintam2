@@ -1,26 +1,25 @@
-# pintam2 v0.3
+# PintaM² v0.5 – versión de prueba
 
-Versión de prueba navegable con PDF real y compartir.
+Cambios incluidos en esta versión:
 
-## Funciona en esta versión
+- La aplicación arranca sin clientes ni presupuestos ficticios.
+- Los clientes se guardan de forma persistente.
+- Los clientes se pueden eliminar deslizando hacia la izquierda.
+- Los contadores de inicio muestran datos reales.
+- Nuevo presupuesto:
+  - Tipo de trabajo, incluido “Otro” con campo automático.
+  - Pantalla de cliente con campo manual y clientes guardados debajo.
+  - Campo libre para obra/lugar: casa, quincho, local, etc.
+  - Medidas sin valores precargados y botón para borrarlas.
+  - Calculadora simplificada a largo × alto.
+  - Trabajos a realizar con campo manual + opciones preestablecidas.
+  - Nueva pantalla Materiales aproximados.
+  - Botón Omitir en cada paso.
+  - Resumen editable.
+  - Vista previa con botón Editar.
+- El presupuesto se puede guardar localmente.
+- El PDF se genera y se puede compartir por el menú de Android/WhatsApp.
+- Atrás vuelve al paso anterior.
+- En Inicio, doble toque en Atrás cierra la aplicación.
 
-- Inicio
-- Clientes
-- Ficha de cliente
-- Presupuestos
-- Plantillas
-- Calculadora
-- Modo claro / oscuro / sistema
-- Flujo Nuevo presupuesto
-- Vista previa real del PDF
-- Generación de PDF
-- Compartir PDF con el menú de Android (incluye WhatsApp si está instalado)
-- Guardar / imprimir mediante el diálogo del sistema
-
-## Importante
-
-El botón "Enviar por WhatsApp" abre el menú de compartir de Android con el PDF adjunto.
-Si WhatsApp está instalado, se puede elegir desde ese menú.
-
-Los datos todavía son de demostración y no se guardan de forma permanente.
-La base de datos local será el próximo módulo.
+Esta sigue siendo una versión de prueba para seguir puliendo el flujo.

@@ -1,10 +1,13 @@
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const PintaM2App());
@@ -19,14 +22,23 @@ class PintaM2App extends StatefulWidget {
 
 class _PintaM2AppState extends State<PintaM2App> {
   ThemeMode _themeMode = ThemeMode.system;
+  final AppStore _store = AppStore();
 
-  void _setTheme(ThemeMode mode) {
-    setState(() => _themeMode = mode);
+  @override
+  void initState() {
+    super.initState();
+    _store.load();
+  }
+
+  @override
+  void dispose() {
+    _store.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF1677FF);
+    const seed = Color(0xFF2F80ED);
 
     return MaterialApp(
       title: 'PintaM²',
@@ -39,12 +51,19 @@ class _PintaM2AppState extends State<PintaM2App> {
           brightness: Brightness.light,
         ),
         scaffoldBackgroundColor: const Color(0xFFF7F9FC),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
         cardTheme: CardThemeData(
-          color: Colors.white,
           elevation: 0,
+          color: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Color(0xFFE7ECF3)),
+            side: const BorderSide(color: Color(0xFFE4EAF2)),
           ),
         ),
       ),
@@ -54,25 +73,276 @@ class _PintaM2AppState extends State<PintaM2App> {
           seedColor: seed,
           brightness: Brightness.dark,
         ),
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
+        scaffoldBackgroundColor: const Color(0xFF111827),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF1F2937),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
         cardTheme: CardThemeData(
-          color: const Color(0xFF172033),
           elevation: 0,
+          color: const Color(0xFF1F2937),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Color(0xFF263247)),
+            side: const BorderSide(color: Color(0xFF374151)),
           ),
         ),
       ),
-      home: MainShell(onThemeChanged: _setTheme),
+      home: AnimatedBuilder(
+        animation: _store,
+        builder: (context, _) {
+          if (!_store.loaded) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          return MainShell(
+            store: _store,
+            onThemeChanged: (mode) => setState(() => _themeMode = mode),
+          );
+        },
+      ),
     );
   }
 }
 
+class ClientData {
+  final String id;
+  final String name;
+  final String address;
+  final String phone;
+
+  const ClientData({
+    required this.id,
+    required this.name,
+    required this.address,
+    this.phone = '',
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'address': address,
+        'phone': phone,
+      };
+
+  factory ClientData.fromJson(Map<String, dynamic> json) {
+    return ClientData(
+      id: (json['id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      address: (json['address'] ?? '').toString(),
+      phone: (json['phone'] ?? '').toString(),
+    );
+  }
+}
+
+class BudgetData {
+  final String id;
+  final String number;
+  final String client;
+  final String place;
+  final String workType;
+  final String measurements;
+  final String jobs;
+  final String materials;
+  final String notes;
+  final String total;
+  final String status;
+  final String createdAt;
+
+  const BudgetData({
+    required this.id,
+    required this.number,
+    required this.client,
+    required this.place,
+    required this.workType,
+    required this.measurements,
+    required this.jobs,
+    required this.materials,
+    required this.notes,
+    required this.total,
+    required this.status,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'number': number,
+        'client': client,
+        'place': place,
+        'workType': workType,
+        'measurements': measurements,
+        'jobs': jobs,
+        'materials': materials,
+        'notes': notes,
+        'total': total,
+        'status': status,
+        'createdAt': createdAt,
+      };
+
+  factory BudgetData.fromJson(Map<String, dynamic> json) {
+    return BudgetData(
+      id: (json['id'] ?? '').toString(),
+      number: (json['number'] ?? '').toString(),
+      client: (json['client'] ?? '').toString(),
+      place: (json['place'] ?? '').toString(),
+      workType: (json['workType'] ?? '').toString(),
+      measurements: (json['measurements'] ?? '').toString(),
+      jobs: (json['jobs'] ?? '').toString(),
+      materials: (json['materials'] ?? '').toString(),
+      notes: (json['notes'] ?? '').toString(),
+      total: (json['total'] ?? '').toString(),
+      status: (json['status'] ?? 'Pendiente').toString(),
+      createdAt: (json['createdAt'] ?? '').toString(),
+    );
+  }
+}
+
+class AppStore extends ChangeNotifier {
+  static const _clientsKey = 'pintam2_clients_v2';
+  static const _budgetsKey = 'pintam2_budgets_v1';
+
+  bool loaded = false;
+  final List<ClientData> clients = [];
+  final List<BudgetData> budgets = [];
+
+  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final clientsRaw = prefs.getString(_clientsKey);
+    if (clientsRaw != null && clientsRaw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(clientsRaw) as List<dynamic>;
+        clients
+          ..clear()
+          ..addAll(
+            decoded.map(
+              (e) => ClientData.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ),
+            ),
+          );
+      } catch (_) {
+        clients.clear();
+      }
+    }
+
+    final budgetsRaw = prefs.getString(_budgetsKey);
+    if (budgetsRaw != null && budgetsRaw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(budgetsRaw) as List<dynamic>;
+        budgets
+          ..clear()
+          ..addAll(
+            decoded.map(
+              (e) => BudgetData.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ),
+            ),
+          );
+      } catch (_) {
+        budgets.clear();
+      }
+    }
+
+    loaded = true;
+    notifyListeners();
+  }
+
+  Future<void> _saveClients() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _clientsKey,
+      jsonEncode(clients.map((e) => e.toJson()).toList()),
+    );
+  }
+
+  Future<void> _saveBudgets() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _budgetsKey,
+      jsonEncode(budgets.map((e) => e.toJson()).toList()),
+    );
+  }
+
+  Future<void> addClient({
+    required String name,
+    required String address,
+    String phone = '',
+  }) async {
+    final client = ClientData(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      name: name.trim(),
+      address: address.trim(),
+      phone: phone.trim(),
+    );
+    clients.add(client);
+    await _saveClients();
+    notifyListeners();
+  }
+
+  Future<void> deleteClient(String id) async {
+    clients.removeWhere((c) => c.id == id);
+    await _saveClients();
+    notifyListeners();
+  }
+
+  Future<void> saveBudget(BudgetData budget) async {
+    final existing = budgets.indexWhere((b) => b.id == budget.id);
+    if (existing >= 0) {
+      budgets[existing] = budget;
+    } else {
+      budgets.insert(0, budget);
+    }
+    await _saveBudgets();
+    notifyListeners();
+  }
+
+  String nextBudgetNumber() {
+    final now = DateTime.now();
+    final n = budgets.length + 1;
+    return '${now.year}-${n.toString().padLeft(4, '0')}';
+  }
+}
+
+class BudgetDraft {
+  String id;
+  String number;
+  String workType;
+  String client;
+  String place;
+  String measurements;
+  String jobs;
+  String materials;
+  String notes;
+  String total;
+
+  BudgetDraft({
+    required this.id,
+    required this.number,
+    this.workType = '',
+    this.client = '',
+    this.place = '',
+    this.measurements = '',
+    this.jobs = '',
+    this.materials = '',
+    this.notes = '',
+    this.total = '',
+  });
+}
+
 class MainShell extends StatefulWidget {
+  final AppStore store;
   final ValueChanged<ThemeMode> onThemeChanged;
 
-  const MainShell({super.key, required this.onThemeChanged});
+  const MainShell({
+    super.key,
+    required this.store,
+    required this.onThemeChanged,
+  });
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -80,212 +350,81 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _index = 0;
+  DateTime? _lastBackPress;
 
-  late final List<Widget> _screens = [
-    HomeScreen(onOpenTab: (i) => setState(() => _index = i)),
-    const ClientsScreen(),
-    const BudgetsScreen(),
-    MoreScreen(onThemeChanged: widget.onThemeChanged),
-  ];
+  Future<void> _handleBack() async {
+    if (_index != 0) {
+      setState(() => _index = 0);
+      return;
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _index, children: _screens),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Inicio',
+    final now = DateTime.now();
+    if (_lastBackPress == null ||
+        now.difference(_lastBackPress!) > const Duration(seconds: 2)) {
+      _lastBackPress = now;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            duration: Duration(seconds: 2),
+            content: Text('Presioná nuevamente para salir de PintaM²'),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people),
-            label: 'Clientes',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.description_outlined),
-            selectedIcon: Icon(Icons.description),
-            label: 'Presupuestos',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.more_horiz),
-            selectedIcon: Icon(Icons.more_horiz),
-            label: 'Más',
-          ),
-        ],
-      ),
-    );
+        );
+      }
+      return;
+    }
+
+    await SystemNavigator.pop();
   }
-}
-
-class HomeScreen extends StatelessWidget {
-  final ValueChanged<int> onOpenTab;
-
-  const HomeScreen({super.key, required this.onOpenTab});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: const BrandAppBar(),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-          children: [
-            Text(
-              '¡Buen día, Mario! 👋',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+    final screens = [
+      HomeScreen(
+        store: widget.store,
+        onOpenTab: (i) => setState(() => _index = i),
+      ),
+      ClientsScreen(store: widget.store),
+      BudgetsScreen(store: widget.store),
+      MoreScreen(
+        store: widget.store,
+        onThemeChanged: widget.onThemeChanged,
+      ),
+    ];
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
+        body: IndexedStack(index: _index, children: screens),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (i) => setState(() => _index = i),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
+              label: 'Inicio',
             ),
-            const SizedBox(height: 4),
-            Text(
-              _today(),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+            NavigationDestination(
+              icon: Icon(Icons.people_outline),
+              selectedIcon: Icon(Icons.people),
+              label: 'Clientes',
             ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const NewBudgetFlow()),
-                );
-              },
-              icon: const Icon(Icons.add_rounded),
-              label: const Text(
-                'Nuevo presupuesto',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
-              ),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(58),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
+            NavigationDestination(
+              icon: Icon(Icons.description_outlined),
+              selectedIcon: Icon(Icons.description),
+              label: 'Presupuestos',
             ),
-            const SizedBox(height: 18),
-            _HomeActionCard(
-              icon: Icons.people_alt_outlined,
-              title: 'Clientes',
-              subtitle: '3 registrados',
-              onTap: () => onOpenTab(1),
-            ),
-            _HomeActionCard(
-              icon: Icons.description_outlined,
-              title: 'Presupuestos',
-              subtitle: '1 pendiente',
-              onTap: () => onOpenTab(2),
-            ),
-            _HomeActionCard(
-              icon: Icons.dashboard_customize_outlined,
-              title: 'Plantillas',
-              subtitle: 'Plantillas base',
-              color: const Color(0xFF7B61FF),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const TemplatesScreen()),
-                );
-              },
-            ),
-            _HomeActionCard(
-              icon: Icons.calculate_outlined,
-              title: 'Calculadora',
-              subtitle: 'Cálculo rápido',
-              color: const Color(0xFF19A974),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const CalculatorScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Último presupuesto',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Juan Pérez',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                    ),
-                    const Text('Casa Barrio Dalvian'),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Chip(
-                          label: const Text('Pendiente'),
-                          avatar: const Icon(Icons.schedule, size: 16),
-                          backgroundColor:
-                              Theme.of(context).colorScheme.secondaryContainer,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Card(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.lightbulb_outline_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 30,
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        'Consejo rápido: elegí el tipo de trabajo que más se ajuste para obtener un cálculo más preciso.',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            NavigationDestination(
+              icon: Icon(Icons.more_horiz),
+              label: 'Más',
             ),
           ],
         ),
       ),
     );
-  }
-
-  static String _today() {
-    final now = DateTime.now();
-    const months = [
-      'enero',
-      'febrero',
-      'marzo',
-      'abril',
-      'mayo',
-      'junio',
-      'julio',
-      'agosto',
-      'septiembre',
-      'octubre',
-      'noviembre',
-      'diciembre'
-    ];
-    return '${now.day} de ${months[now.month - 1]} de ${now.year}';
   }
 }
 
@@ -319,87 +458,321 @@ class BrandAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-class _HomeActionCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-  final Color? color;
+class HomeScreen extends StatelessWidget {
+  final AppStore store;
+  final ValueChanged<int> onOpenTab;
 
-  const _HomeActionCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.color,
+  const HomeScreen({
+    super.key,
+    required this.store,
+    required this.onOpenTab,
   });
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? Theme.of(context).colorScheme.primary;
+    final pending =
+        store.budgets.where((b) => b.status == 'Pendiente').length;
+
+    return Scaffold(
+      appBar: const BrandAppBar(),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+        children: [
+          Text(
+            '${_greeting()}, Mario 👋',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _today(),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => NewBudgetFlow(store: store),
+                ),
+              );
+            },
+            icon: const Icon(Icons.add),
+            label: const Text(
+              'Nuevo presupuesto',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            ),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(58),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          _HomeCard(
+            icon: Icons.people_alt_outlined,
+            title: 'Clientes',
+            subtitle: '${store.clients.length} registrados',
+            onTap: () => onOpenTab(1),
+          ),
+          _HomeCard(
+            icon: Icons.description_outlined,
+            title: 'Presupuestos',
+            subtitle: pending == 0 ? '0 pendientes' : '$pending pendientes',
+            onTap: () => onOpenTab(2),
+          ),
+          _HomeCard(
+            icon: Icons.dashboard_customize_outlined,
+            title: 'Plantillas',
+            subtitle: 'Textos rápidos',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const TemplatesScreen()),
+              );
+            },
+          ),
+          _HomeCard(
+            icon: Icons.calculate_outlined,
+            title: 'Calculadora',
+            subtitle: 'Largo × alto',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CalculatorScreen()),
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: store.budgets.isEmpty
+                  ? const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Último presupuesto',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        SizedBox(height: 10),
+                        Text('Todavía no creaste ningún presupuesto.'),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Último presupuesto',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          store.budgets.first.client.isEmpty
+                              ? 'Sin cliente'
+                              : store.budgets.first.client,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(store.budgets.first.number),
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Buen día';
+    if (hour < 20) return 'Buenas tardes';
+    return 'Buenas noches';
+  }
+
+  static String _today() {
+    final now = DateTime.now();
+    const months = [
+      'enero',
+      'febrero',
+      'marzo',
+      'abril',
+      'mayo',
+      'junio',
+      'julio',
+      'agosto',
+      'septiembre',
+      'octubre',
+      'noviembre',
+      'diciembre'
+    ];
+    return '${now.day} de ${months[now.month - 1]} de ${now.year}';
+  }
+}
+
+class _HomeCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _HomeCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         onTap: onTap,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        leading: Icon(icon, color: c, size: 28),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        leading: Icon(
+          icon,
+          color: Theme.of(context).colorScheme.primary,
+          size: 28,
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right_rounded),
+        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }
 }
 
-class ClientsScreen extends StatelessWidget {
-  const ClientsScreen({super.key});
+class ClientsScreen extends StatefulWidget {
+  final AppStore store;
+
+  const ClientsScreen({super.key, required this.store});
+
+  @override
+  State<ClientsScreen> createState() => _ClientsScreenState();
+}
+
+class _ClientsScreenState extends State<ClientsScreen> {
+  final _search = TextEditingController();
+  String query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final clients = [
-      ('Juan Pérez', 'Casa Barrio Dalvian', '3 presupuestos'),
-      ('María González', 'Departamento Centro', '1 presupuesto'),
-      ('Carlos Rodríguez', 'Quincho', '2 presupuestos'),
-    ];
+    final q = query.trim().toLowerCase();
+    final visible = widget.store.clients.where((c) {
+      if (q.isEmpty) return true;
+      return c.name.toLowerCase().contains(q) ||
+          c.address.toLowerCase().contains(q) ||
+          c.phone.toLowerCase().contains(q);
+    }).toList();
 
     return Scaffold(
       appBar: const BrandAppBar(),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showNewClient(context),
+        onPressed: _newClient,
         icon: const Icon(Icons.person_add_alt_1),
         label: const Text('Nuevo cliente'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
         children: [
           TextField(
-            decoration: InputDecoration(
+            controller: _search,
+            onChanged: (v) => setState(() => query = v),
+            decoration: const InputDecoration(
               hintText: 'Buscar cliente...',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              prefixIcon: Icon(Icons.search),
             ),
           ),
-          const SizedBox(height: 16),
-          ...clients.map(
-            (c) => Card(
-              child: ListTile(
-                leading: CircleAvatar(child: Text(c.$1[0])),
-                title: Text(c.$1,
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text('${c.$2}\n${c.$3}'),
-                isThreeLine: true,
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ClientDetailScreen(name: c.$1),
+          const SizedBox(height: 14),
+          if (visible.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(22),
+                child: Column(
+                  children: [
+                    Icon(Icons.people_outline, size: 42),
+                    SizedBox(height: 10),
+                    Text(
+                      'No hay clientes guardados',
+                      style: TextStyle(fontWeight: FontWeight.w800),
                     ),
-                  );
-                },
+                  ],
+                ),
+              ),
+            ),
+          ...visible.map(
+            (client) => Dismissible(
+              key: ValueKey(client.id),
+              direction: DismissDirection.endToStart,
+              confirmDismiss: (_) async {
+                return await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Eliminar cliente'),
+                        content: Text(
+                          '¿Querés eliminar a ${client.name}?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancelar'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Eliminar'),
+                          ),
+                        ],
+                      ),
+                    ) ??
+                    false;
+              },
+              onDismissed: (_) => widget.store.deleteClient(client.id),
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 22),
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(Icons.delete_outline),
+              ),
+              child: Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    child: Text(
+                      client.name.isEmpty ? '?' : client.name[0].toUpperCase(),
+                    ),
+                  ),
+                  title: Text(
+                    client.name,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    [
+                      if (client.address.isNotEmpty) client.address,
+                      if (client.phone.isNotEmpty) client.phone,
+                    ].join('\n'),
+                  ),
+                ),
               ),
             ),
           ),
@@ -408,11 +781,12 @@ class ClientsScreen extends StatelessWidget {
     );
   }
 
-  void _showNewClient(BuildContext context) {
-    final nameController = TextEditingController();
-    final addressController = TextEditingController();
+  Future<void> _newClient() async {
+    final name = TextEditingController();
+    final address = TextEditingController();
+    final phone = TextEditingController();
 
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -428,25 +802,47 @@ class ClientsScreen extends StatelessWidget {
           children: [
             const Text(
               'Nuevo cliente',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 16),
             TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Nombre'),
+              controller: name,
+              decoration: const InputDecoration(
+                labelText: 'Nombre del cliente',
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
-              controller: addressController,
-              decoration: const InputDecoration(labelText: 'Dirección de obra'),
+              controller: address,
+              decoration: const InputDecoration(
+                labelText: 'Dirección de la obra',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: phone,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Teléfono (opcional)',
+              ),
             ),
             const SizedBox(height: 18),
             FilledButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cliente guardado (demo)')),
+              onPressed: () async {
+                if (name.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(
+                      content: Text('Ingresá el nombre del cliente'),
+                    ),
+                  );
+                  return;
+                }
+                await widget.store.addClient(
+                  name: name.text,
+                  address: address.text,
+                  phone: phone.text,
                 );
+                if (ctx.mounted) Navigator.pop(ctx);
               },
               child: const Text('Guardar cliente'),
             ),
@@ -457,97 +853,69 @@ class ClientsScreen extends StatelessWidget {
   }
 }
 
-class ClientDetailScreen extends StatelessWidget {
-  final String name;
-
-  const ClientDetailScreen({super.key, required this.name});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(name)),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.location_on_outlined),
-              title: const Text('Casa Barrio Dalvian'),
-              subtitle: const Text('Av. del Sol 1234'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {},
-            ),
-          ),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.home_work_outlined),
-              title: const Text('Quincho'),
-              subtitle: const Text('Barrio Dalvian'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {},
-            ),
-          ),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NewBudgetFlow()),
-              );
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Nuevo presupuesto'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class BudgetsScreen extends StatelessWidget {
-  const BudgetsScreen({super.key});
+  final AppStore store;
+
+  const BudgetsScreen({super.key, required this.store});
 
   @override
   Widget build(BuildContext context) {
-    final items = [
-      ('2026-0008', 'Juan Pérez', 'Pendiente', '\$356.800'),
-      ('2026-0007', 'María González', 'Aceptado', '\$198.500'),
-      ('2026-0006', 'Carlos Rodríguez', 'Rechazado', '\$420.000'),
-    ];
-
     return Scaffold(
       appBar: const BrandAppBar(),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Wrap(
-            spacing: 8,
-            children: const [
-              FilterChip(label: Text('Todos'), selected: true, onSelected: null),
-              FilterChip(label: Text('Pendientes'), selected: false, onSelected: null),
-              FilterChip(label: Text('Aceptados'), selected: false, onSelected: null),
-            ],
-          ),
-          const SizedBox(height: 14),
-          ...items.map(
+          if (store.budgets.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(22),
+                child: Column(
+                  children: [
+                    Icon(Icons.description_outlined, size: 42),
+                    SizedBox(height: 10),
+                    Text(
+                      'Todavía no hay presupuestos',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ...store.budgets.map(
             (b) => Card(
               child: ListTile(
                 leading: const Icon(Icons.description_outlined),
-                title: Text('${b.$1} · ${b.$2}',
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text(b.$3),
+                title: Text(
+                  '${b.number} · ${b.client.isEmpty ? 'Sin cliente' : b.client}',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  '${b.place}\n${b.status}',
+                ),
+                isThreeLine: true,
                 trailing: Text(
-                  b.$4,
+                  b.total.isEmpty ? '' : '\$${b.total}',
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 onTap: () {
+                  final draft = BudgetDraft(
+                    id: b.id,
+                    number: b.number,
+                    workType: b.workType,
+                    client: b.client,
+                    place: b.place,
+                    measurements: b.measurements,
+                    jobs: b.jobs,
+                    materials: b.materials,
+                    notes: b.notes,
+                    total: b.total,
+                  );
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => BudgetPreviewScreen(
-                        number: b.$1,
-                        client: b.$2,
-                        total: b.$4,
+                        store: store,
+                        draft: draft,
                       ),
                     ),
                   );
@@ -566,36 +934,28 @@ class TemplatesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const templates = [
-      ('Pintura interior', Icons.home_outlined),
-      ('Pintura exterior', Icons.house_siding_outlined),
-      ('Barniz', Icons.chair_alt_outlined),
-      ('Esmalte sintético', Icons.format_paint_outlined),
-      ('Membrana líquida', Icons.water_drop_outlined),
+    const items = [
+      'Protección de pisos y muebles',
+      'Tapado de pequeñas imperfecciones',
+      'Lijado donde sea necesario',
+      'Aplicación de 2 manos de pintura látex',
+      'Limpieza final',
     ];
 
     return Scaffold(
       appBar: AppBar(title: const Text('Plantillas')),
       body: ListView(
         padding: const EdgeInsets.all(20),
-        children: [
-          ...templates.map(
-            (t) => Card(
-              child: ListTile(
-                leading: Icon(t.$2),
-                title: Text(t.$1,
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: const Text('Tocá para usar o editar'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Plantilla "${t.$1}" seleccionada')),
-                  );
-                },
+        children: items
+            .map(
+              (e) => Card(
+                child: ListTile(
+                  leading: const Icon(Icons.check_circle_outline),
+                  title: Text(e),
+                ),
               ),
-            ),
-          ),
-        ],
+            )
+            .toList(),
       ),
     );
   }
@@ -609,35 +969,21 @@ class CalculatorScreen extends StatefulWidget {
 }
 
 class _CalculatorScreenState extends State<CalculatorScreen> {
-  final _length = TextEditingController(text: '5');
-  final _width = TextEditingController(text: '4');
-  final _height = TextEditingController(text: '2.8');
-
-  double? _area;
-  double? _liters;
-
-  void _calculate() {
-    final l = double.tryParse(_length.text.replaceAll(',', '.')) ?? 0;
-    final w = double.tryParse(_width.text.replaceAll(',', '.')) ?? 0;
-    final h = double.tryParse(_height.text.replaceAll(',', '.')) ?? 0;
-
-    final walls = 2 * (l + w) * h;
-    final ceiling = l * w;
-    final area = walls + ceiling;
-    final liters = area * 2 / 10;
-
-    setState(() {
-      _area = area;
-      _liters = liters;
-    });
-  }
+  final length = TextEditingController();
+  final height = TextEditingController();
+  double? area;
 
   @override
   void dispose() {
-    _length.dispose();
-    _width.dispose();
-    _height.dispose();
+    length.dispose();
+    height.dispose();
     super.dispose();
+  }
+
+  void calculate() {
+    final l = double.tryParse(length.text.replaceAll(',', '.')) ?? 0;
+    final h = double.tryParse(height.text.replaceAll(',', '.')) ?? 0;
+    setState(() => area = l * h);
   }
 
   @override
@@ -648,71 +994,42 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           const Text(
-            'Ambiente completo',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            'Calcular pared',
+            style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
           ),
-          const SizedBox(height: 8),
-          const Text('Paredes + cielorraso, 2 manos, rendimiento 10 m²/L.'),
+          const SizedBox(height: 6),
+          const Text('Ingresá largo × alto.'),
           const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _length,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Largo (m)'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: _width,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Ancho (m)'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: _height,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Alto (m)'),
-                ),
-              ),
-            ],
+          TextField(
+            controller: length,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Largo (m)'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: height,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Alto (m)'),
           ),
           const SizedBox(height: 18),
           FilledButton.icon(
-            onPressed: _calculate,
+            onPressed: calculate,
             icon: const Icon(Icons.calculate),
             label: const Text('Calcular'),
           ),
-          if (_area != null) ...[
+          if (area != null) ...[
             const SizedBox(height: 18),
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  children: [
-                    Text(
-                      '${_area!.toStringAsFixed(1)} m²',
-                      style: const TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.w900,
-                      ),
+                padding: const EdgeInsets.all(20),
+                child: Center(
+                  child: Text(
+                    '${area!.toStringAsFixed(2)} m²',
+                    style: const TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w900,
                     ),
-                    const Text('Superficie aproximada'),
-                    const Divider(height: 28),
-                    Text(
-                      '${_liters!.toStringAsFixed(1)} litros',
-                      style: TextStyle(
-                        fontSize: 24,
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const Text('Pintura estimada'),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -724,9 +1041,14 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 }
 
 class MoreScreen extends StatelessWidget {
+  final AppStore store;
   final ValueChanged<ThemeMode> onThemeChanged;
 
-  const MoreScreen({super.key, required this.onThemeChanged});
+  const MoreScreen({
+    super.key,
+    required this.store,
+    required this.onThemeChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -739,7 +1061,6 @@ class MoreScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.dashboard_customize_outlined),
               title: const Text('Plantillas'),
-              trailing: const Icon(Icons.chevron_right),
               onTap: () {
                 Navigator.push(
                   context,
@@ -752,7 +1073,6 @@ class MoreScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.calculate_outlined),
               title: const Text('Calculadora'),
-              trailing: const Icon(Icons.chevron_right),
               onTap: () {
                 Navigator.push(
                   context,
@@ -765,27 +1085,21 @@ class MoreScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.palette_outlined),
               title: const Text('Apariencia'),
-              subtitle: const Text('Claro, oscuro o seguir el sistema'),
-              onTap: () => _showThemePicker(context),
+              subtitle: const Text('Claro, oscuro o sistema'),
+              onTap: () => _themePicker(context),
             ),
           ),
           Card(
             child: ListTile(
               leading: const Icon(Icons.lightbulb_outline),
               title: const Text('Sugerir una mejora'),
-              subtitle: const Text('Próximamente'),
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Función en preparación')),
+                  const SnackBar(
+                    content: Text('Esta función se conectará más adelante.'),
+                  ),
                 );
               },
-            ),
-          ),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('Acerca de PintaM²'),
-              subtitle: const Text('Versión de prueba 0.2'),
             ),
           ),
         ],
@@ -793,7 +1107,7 @@ class MoreScreen extends StatelessWidget {
     );
   }
 
-  void _showThemePicker(BuildContext context) {
+  void _themePicker(BuildContext context) {
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
@@ -801,12 +1115,6 @@ class MoreScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const ListTile(
-              title: Text(
-                'Apariencia',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
             ListTile(
               leading: const Icon(Icons.phone_android),
               title: const Text('Seguir el sistema'),
@@ -839,7 +1147,9 @@ class MoreScreen extends StatelessWidget {
 }
 
 class NewBudgetFlow extends StatefulWidget {
-  const NewBudgetFlow({super.key});
+  final AppStore store;
+
+  const NewBudgetFlow({super.key, required this.store});
 
   @override
   State<NewBudgetFlow> createState() => _NewBudgetFlowState();
@@ -847,34 +1157,51 @@ class NewBudgetFlow extends StatefulWidget {
 
 class _NewBudgetFlowState extends State<NewBudgetFlow> {
   int step = 0;
-  String workType = 'Pintura interior';
-  String client = 'Juan Pérez';
-  String work = 'Casa Barrio Dalvian';
-  double area = 74.2;
-  final totalController = TextEditingController(text: '356800');
+  late final BudgetDraft draft;
 
-  final steps = const [
-    'Tipo',
-    'Cliente',
-    'Obra',
-    'Medidas',
-    'Trabajo',
-    'Resumen',
+  final otherWorkController = TextEditingController();
+  final clientController = TextEditingController();
+  final placeController = TextEditingController();
+  final jobsController = TextEditingController();
+  final materialsController = TextEditingController();
+  final measurementsController = TextEditingController();
+  final notesController = TextEditingController();
+  final totalController = TextEditingController();
+
+  final List<String> presetJobs = const [
+    'Protección de pisos y muebles',
+    'Tapado de pequeñas imperfecciones',
+    'Lijado donde sea necesario',
+    'Aplicación de 2 manos de pintura látex',
+    'Limpieza final',
   ];
+
+  String selectedWorkType = '';
+  bool saveNewClient = false;
+
+  @override
+  void initState() {
+    super.initState();
+    draft = BudgetDraft(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      number: widget.store.nextBudgetNumber(),
+    );
+  }
 
   @override
   void dispose() {
+    otherWorkController.dispose();
+    clientController.dispose();
+    placeController.dispose();
+    jobsController.dispose();
+    materialsController.dispose();
+    measurementsController.dispose();
+    notesController.dispose();
     totalController.dispose();
     super.dispose();
   }
 
-  void next() {
-    if (step < steps.length - 1) {
-      setState(() => step++);
-    }
-  }
-
-  void back() {
+  Future<void> _back() async {
     if (step > 0) {
       setState(() => step--);
     } else {
@@ -882,410 +1209,476 @@ class _NewBudgetFlowState extends State<NewBudgetFlow> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: back),
-        title: const Text('Nuevo presupuesto'),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
-            child: Row(
-              children: List.generate(
-                steps.length,
-                (i) => Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: i <= step
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(child: _stepBody(context)),
-        ],
-      ),
-    );
-  }
-
-  Widget _stepBody(BuildContext context) {
-    switch (step) {
-      case 0:
-        return _WorkTypeStep(
-          selected: workType,
-          onSelected: (v) {
-            setState(() => workType = v);
-            next();
-          },
-        );
-      case 1:
-        return _ChoiceStep(
-          title: 'Seleccioná el cliente',
-          choices: const ['Juan Pérez', 'María González', 'Carlos Rodríguez'],
-          selected: client,
-          onSelected: (v) => setState(() => client = v),
-          onContinue: next,
-        );
-      case 2:
-        return _ChoiceStep(
-          title: 'Seleccioná la obra',
-          choices: const [
-            'Casa Barrio Dalvian',
-            'Quincho',
-            'Departamento Centro'
-          ],
-          selected: work,
-          onSelected: (v) => setState(() => work = v),
-          onContinue: next,
-        );
-      case 3:
-        return _MeasureStep(
-          area: area,
-          onAreaChanged: (v) => setState(() => area = v),
-          onContinue: next,
-        );
-      case 4:
-        return _JobsStep(onContinue: next);
-      default:
-        return _SummaryStep(
-          client: client,
-          work: work,
-          workType: workType,
-          area: area,
-          totalController: totalController,
-          onFinish: () {
-            final total = totalController.text.trim().isEmpty
-                ? '0'
-                : totalController.text.trim();
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => BudgetPreviewScreen(
-                  number: '2026-0009',
-                  client: client,
-                  total: '\$$total',
-                ),
-              ),
-            );
-          },
-        );
+  void _next() {
+    _syncDraft();
+    if (step < 5) {
+      setState(() => step++);
     }
   }
-}
 
-class _WorkTypeStep extends StatelessWidget {
-  final String selected;
-  final ValueChanged<String> onSelected;
+  void _skip() {
+    if (step == 0) {
+      selectedWorkType = '';
+      otherWorkController.clear();
+    } else if (step == 1) {
+      clientController.clear();
+    } else if (step == 2) {
+      placeController.clear();
+    } else if (step == 3) {
+      measurementsController.clear();
+    } else if (step == 4) {
+      jobsController.clear();
+    } else if (step == 5) {
+      materialsController.clear();
+    }
+    _next();
+  }
 
-  const _WorkTypeStep({required this.selected, required this.onSelected});
+  void _syncDraft() {
+    draft.workType = selectedWorkType == 'Otro'
+        ? otherWorkController.text.trim()
+        : selectedWorkType;
+    draft.client = clientController.text.trim();
+    draft.place = placeController.text.trim();
+    draft.measurements = measurementsController.text.trim();
+    draft.jobs = jobsController.text.trim();
+    draft.materials = materialsController.text.trim();
+    draft.notes = notesController.text.trim();
+    draft.total = totalController.text.trim();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final types = [
-      ('Pintura interior', Icons.home_outlined),
-      ('Pintura exterior', Icons.house_siding_outlined),
-      ('Pintura rápida', Icons.format_paint_outlined),
-      ('Barniz', Icons.chair_alt_outlined),
-      ('Esmalte sintético', Icons.format_color_fill_outlined),
-      ('Membrana líquida', Icons.water_drop_outlined),
-      ('Otro', Icons.more_horiz),
-    ];
-
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        const Text(
-          'Seleccioná el tipo de trabajo',
-          style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _back();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            onPressed: _back,
+            icon: const Icon(Icons.arrow_back),
+          ),
+          title: const Text('Nuevo presupuesto'),
         ),
-        const SizedBox(height: 14),
-        ...types.map(
-          (t) => Card(
-            child: ListTile(
-              leading: Icon(t.$2),
-              title: Text(t.$1,
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              trailing: selected == t.$1
-                  ? Icon(Icons.check_circle,
-                      color: Theme.of(context).colorScheme.primary)
-                  : const Icon(Icons.chevron_right),
-              onTap: () => onSelected(t.$1),
+        body: Column(
+          children: [
+            _progress(context),
+            Expanded(child: _stepBody()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _progress(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+      child: Row(
+        children: List.generate(
+          7,
+          (i) => Expanded(
+            child: Container(
+              height: 5,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                color: i <= step
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(99),
+              ),
             ),
           ),
         ),
-      ],
+      ),
     );
   }
-}
 
-class _ChoiceStep extends StatelessWidget {
-  final String title;
-  final List<String> choices;
-  final String selected;
-  final ValueChanged<String> onSelected;
-  final VoidCallback onContinue;
+  Widget _stepBody() {
+    switch (step) {
+      case 0:
+        return _typeStep();
+      case 1:
+        return _clientStep();
+      case 2:
+        return _placeStep();
+      case 3:
+        return _measurementsStep();
+      case 4:
+        return _jobsStep();
+      case 5:
+        return _materialsStep();
+      default:
+        return _summaryStep();
+    }
+  }
 
-  const _ChoiceStep({
-    required this.title,
-    required this.choices,
-    required this.selected,
-    required this.onSelected,
-    required this.onContinue,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _screenScaffold({
+    required String title,
+    required Widget child,
+    bool showSkip = true,
+    String continueText = 'Continuar',
+    VoidCallback? onContinue,
+  }) {
     return Column(
       children: [
         Expanded(
           child: ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              Text(title,
-                  style: const TextStyle(
-                      fontSize: 23, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 14),
-              ...choices.map(
-                (c) => Card(
-                  child: RadioListTile<String>(
-                    value: c,
-                    groupValue: selected,
-                    onChanged: (v) {
-                      if (v != null) onSelected(v);
-                    },
-                    title: Text(c,
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
-                  ),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 23,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
+              const SizedBox(height: 16),
+              child,
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: FilledButton(
-            onPressed: onContinue,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(54),
-            ),
-            child: const Text('Continuar'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MeasureStep extends StatelessWidget {
-  final double area;
-  final ValueChanged<double> onAreaChanged;
-  final VoidCallback onContinue;
-
-  const _MeasureStep({
-    required this.area,
-    required this.onAreaChanged,
-    required this.onContinue,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final ctrl = TextEditingController(text: area.toStringAsFixed(1));
-
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        const Text(
-          'Medidas',
-          style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 6),
-        const Text('Podés escribir directamente los m² por ahora.'),
-        const SizedBox(height: 18),
-        TextField(
-          controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: 'Superficie total',
-            suffixText: 'm²',
-          ),
-          onChanged: (v) {
-            final parsed = double.tryParse(v.replaceAll(',', '.'));
-            if (parsed != null) onAreaChanged(parsed);
-          },
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const CalculatorScreen()),
-            );
-          },
-          icon: const Icon(Icons.calculate_outlined),
-          label: const Text('Abrir calculadora'),
-        ),
-        const SizedBox(height: 24),
-        FilledButton(
-          onPressed: onContinue,
-          child: const Text('Continuar'),
-        ),
-      ],
-    );
-  }
-}
-
-class _JobsStep extends StatefulWidget {
-  final VoidCallback onContinue;
-
-  const _JobsStep({required this.onContinue});
-
-  @override
-  State<_JobsStep> createState() => _JobsStepState();
-}
-
-class _JobsStepState extends State<_JobsStep> {
-  final jobs = <String, bool>{
-    'Protección de pisos y muebles': true,
-    'Tapado de pequeñas imperfecciones': true,
-    'Lijado donde sea necesario': true,
-    'Aplicación de 2 manos de pintura látex': true,
-    'Limpieza final': true,
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              const Text(
-                'Trabajos a realizar',
-                style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 14),
-              ...jobs.entries.map(
-                (e) => Card(
-                  child: SwitchListTile(
-                    value: e.value,
-                    onChanged: (v) => setState(() => jobs[e.key] = v),
-                    title: Text(e.key),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: FilledButton(
-            onPressed: widget.onContinue,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(54),
-            ),
-            child: const Text('Continuar'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SummaryStep extends StatelessWidget {
-  final String client;
-  final String work;
-  final String workType;
-  final double area;
-  final TextEditingController totalController;
-  final VoidCallback onFinish;
-
-  const _SummaryStep({
-    required this.client,
-    required this.work,
-    required this.workType,
-    required this.area,
-    required this.totalController,
-    required this.onFinish,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final liters = area * 2 / 10;
-
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        const Text(
-          'Resumen',
-          style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 14),
-        Card(
+        SafeArea(
+          top: false,
           child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+            child: Row(
               children: [
-                _SummaryRow('Cliente', client),
-                _SummaryRow('Obra', work),
-                _SummaryRow('Trabajo', workType),
-                _SummaryRow('Superficie', '${area.toStringAsFixed(1)} m²'),
-                _SummaryRow(
-                  'Pintura aprox.',
-                  '${liters.toStringAsFixed(1)} L',
+                if (showSkip)
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _skip,
+                      child: const Text('Omitir'),
+                    ),
+                  ),
+                if (showSkip) const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: onContinue ?? _next,
+                    child: Text(continueText),
+                  ),
                 ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: totalController,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Total del presupuesto',
-            prefixText: '\$ ',
-          ),
-        ),
-        const SizedBox(height: 20),
-        FilledButton.icon(
-          onPressed: onFinish,
-          icon: const Icon(Icons.check_circle_outline),
-          label: const Text('Finalizar presupuesto'),
-        ),
       ],
     );
   }
-}
 
-class _SummaryRow extends StatelessWidget {
-  final String label;
-  final String value;
+  Widget _typeStep() {
+    const types = [
+      'Pintura interior',
+      'Pintura exterior',
+      'Pintura rápida',
+      'Barniz',
+      'Esmalte sintético',
+      'Membrana líquida',
+      'Otro',
+    ];
 
-  const _SummaryRow(this.label, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
+    return _screenScaffold(
+      title: 'Seleccioná el tipo de trabajo',
+      child: Column(
         children: [
-          Expanded(child: Text(label)),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+          ...types.map(
+            (t) => Card(
+              child: RadioListTile<String>(
+                value: t,
+                groupValue: selectedWorkType,
+                onChanged: (v) {
+                  setState(() => selectedWorkType = v ?? '');
+                },
+                title: Text(
+                  t,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ),
+          if (selectedWorkType == 'Otro') ...[
+            const SizedBox(height: 10),
+            TextField(
+              controller: otherWorkController,
+              decoration: const InputDecoration(
+                labelText: 'Nombre del trabajo',
+                hintText: 'Ej.: Microcemento, reparación...',
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _clientStep() {
+    return _screenScaffold(
+      title: 'Nombre del cliente',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: clientController,
+            decoration: const InputDecoration(
+              labelText: 'Nombre del cliente',
+              hintText: 'Escribilo manualmente',
+            ),
+          ),
+          const SizedBox(height: 12),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: saveNewClient,
+            onChanged: (v) => setState(() => saveNewClient = v ?? false),
+            title: const Text('Guardar cliente para futuros presupuestos'),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'Clientes guardados',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          if (widget.store.clients.isEmpty)
+            const Text('Todavía no hay clientes guardados.'),
+          ...widget.store.clients.map(
+            (client) => Card(
+              child: ListTile(
+                title: Text(
+                  client.name,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: client.address.isEmpty
+                    ? null
+                    : Text(client.address),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  setState(() {
+                    clientController.text = client.name;
+                    saveNewClient = false;
+                  });
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+      onContinue: () async {
+        if (saveNewClient && clientController.text.trim().isNotEmpty) {
+          final alreadyExists = widget.store.clients.any(
+            (c) =>
+                c.name.trim().toLowerCase() ==
+                clientController.text.trim().toLowerCase(),
+          );
+          if (!alreadyExists) {
+            await widget.store.addClient(
+              name: clientController.text,
+              address: '',
+            );
+          }
+        }
+        _next();
+      },
+    );
+  }
+
+  Widget _placeStep() {
+    return _screenScaffold(
+      title: '¿Dónde es el trabajo?',
+      child: TextField(
+        controller: placeController,
+        decoration: const InputDecoration(
+          labelText: 'Obra / lugar del trabajo',
+          hintText: 'Ej.: Casa, quincho, local, departamento...',
+        ),
+      ),
+    );
+  }
+
+  Widget _measurementsStep() {
+    return _screenScaffold(
+      title: 'Medidas',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: measurementsController,
+            minLines: 3,
+            maxLines: 5,
+            decoration: const InputDecoration(
+              labelText: 'Medidas o m²',
+              hintText: 'Ej.: Pared 1: 4,20 × 2,60 = 10,92 m²',
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CalculatorScreen()),
+              );
+            },
+            icon: const Icon(Icons.calculate_outlined),
+            label: const Text('Abrir calculadora'),
+          ),
+          const SizedBox(height: 6),
+          TextButton.icon(
+            onPressed: () => measurementsController.clear(),
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Borrar medidas'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _jobsStep() {
+    return _screenScaffold(
+      title: 'Trabajos a realizar',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: jobsController,
+            minLines: 5,
+            maxLines: 10,
+            decoration: const InputDecoration(
+              labelText: 'Escribí el trabajo a realizar',
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'Opciones preestablecidas',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          ...presetJobs.map(
+            (job) => Card(
+              child: ListTile(
+                leading: const Icon(Icons.add_circle_outline),
+                title: Text(job),
+                onTap: () {
+                  final current = jobsController.text.trim();
+                  jobsController.text =
+                      current.isEmpty ? '• $job' : '$current\n• $job';
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _materialsStep() {
+    return _screenScaffold(
+      title: 'Materiales aproximados',
+      child: TextField(
+        controller: materialsController,
+        minLines: 6,
+        maxLines: 12,
+        decoration: const InputDecoration(
+          labelText: 'Materiales necesarios',
+          hintText:
+              'Ej.: 20 L látex interior\n5 kg enduido\n2 cintas\nLijas',
+          alignLabelWithHint: true,
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryStep() {
+    _syncDraft();
+
+    return _screenScaffold(
+      title: 'Revisá el presupuesto',
+      showSkip: false,
+      continueText: 'Vista previa',
+      onContinue: () async {
+        _syncDraft();
+
+        final edited = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => BudgetPreviewScreen(
+              store: widget.store,
+              draft: draft,
+            ),
+          ),
+        );
+
+        if (edited == true && mounted) {
+          setState(() {
+            selectedWorkType = draft.workType;
+            if (!const [
+              'Pintura interior',
+              'Pintura exterior',
+              'Pintura rápida',
+              'Barniz',
+              'Esmalte sintético',
+              'Membrana líquida',
+            ].contains(draft.workType)) {
+              selectedWorkType = draft.workType.isEmpty ? '' : 'Otro';
+              otherWorkController.text = draft.workType;
+            }
+            clientController.text = draft.client;
+            placeController.text = draft.place;
+            measurementsController.text = draft.measurements;
+            jobsController.text = draft.jobs;
+            materialsController.text = draft.materials;
+            notesController.text = draft.notes;
+            totalController.text = draft.total;
+          });
+        }
+      },
+      child: Column(
+        children: [
+          TextField(
+            controller: clientController,
+            decoration: const InputDecoration(labelText: 'Cliente'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: placeController,
+            decoration: const InputDecoration(labelText: 'Obra / lugar'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: jobsController,
+            minLines: 4,
+            maxLines: 8,
+            decoration: const InputDecoration(
+              labelText: 'Trabajos a realizar',
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: materialsController,
+            minLines: 4,
+            maxLines: 8,
+            decoration: const InputDecoration(
+              labelText: 'Materiales aproximados',
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: notesController,
+            minLines: 3,
+            maxLines: 6,
+            decoration: const InputDecoration(
+              labelText: 'Aclaraciones',
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: totalController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Total',
+              prefixText: '\$ ',
             ),
           ),
         ],
@@ -1294,220 +1687,131 @@ class _SummaryRow extends StatelessWidget {
   }
 }
 
-
-class BudgetPreviewScreen extends StatelessWidget {
-  final String number;
-  final String client;
-  final String total;
+class BudgetPreviewScreen extends StatefulWidget {
+  final AppStore store;
+  final BudgetDraft draft;
 
   const BudgetPreviewScreen({
     super.key,
-    required this.number,
-    required this.client,
-    required this.total,
+    required this.store,
+    required this.draft,
   });
 
+  @override
+  State<BudgetPreviewScreen> createState() => _BudgetPreviewScreenState();
+}
+
+class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
+  bool saving = false;
+
   Future<Uint8List> _buildPdf() async {
+    final d = widget.draft;
     final pdf = pw.Document();
-    final blue = PdfColor.fromHex('#1677FF');
+    final blue = PdfColor.fromHex('#2F80ED');
     final lightBlue = PdfColor.fromHex('#EAF3FF');
-    final grey = PdfColor.fromHex('#5B6573');
+    final grey = PdfColor.fromHex('#596579');
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(36),
-        build: (context) => [
+        build: (_) => [
           pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Container(
-                width: 42,
-                height: 42,
-                decoration: pw.BoxDecoration(
+              pw.Text(
+                'PintaM2',
+                style: pw.TextStyle(
                   color: blue,
-                  borderRadius: pw.BorderRadius.circular(8),
+                  fontSize: 22,
+                  fontWeight: pw.FontWeight.bold,
                 ),
-                alignment: pw.Alignment.center,
-                child: pw.Text(
-                  'P',
-                  style: pw.TextStyle(
-                    color: PdfColors.white,
-                    fontSize: 22,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-              ),
-              pw.SizedBox(width: 12),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'PintaM2',
-                    style: pw.TextStyle(
-                      color: blue,
-                      fontSize: 22,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.Text(
-                    'PRESUPUESTO',
-                    style: pw.TextStyle(
-                      color: grey,
-                      fontSize: 10,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                ],
               ),
               pw.Spacer(),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  pw.Text(
-                    'N.o $number',
-                    style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold,
-                      fontSize: 11,
-                    ),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    _pdfDate(),
-                    style: pw.TextStyle(color: grey, fontSize: 9),
-                  ),
-                ],
+              pw.Text(
+                'PRESUPUESTO ${d.number}',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
             ],
           ),
-          pw.SizedBox(height: 18),
-          pw.Divider(color: blue, thickness: 1.4),
+          pw.SizedBox(height: 10),
+          pw.Divider(color: blue),
           pw.SizedBox(height: 12),
-
-          pw.Container(
-            padding: const pw.EdgeInsets.all(12),
-            decoration: pw.BoxDecoration(
-              color: lightBlue,
-              borderRadius: pw.BorderRadius.circular(8),
-            ),
-            child: pw.Row(
-              children: [
-                pw.Expanded(
-                  child: _pdfInfoBlock('CLIENTE', client),
-                ),
-                pw.SizedBox(width: 12),
-                pw.Expanded(
-                  child: _pdfInfoBlock(
-                    'OBRA',
-                    'Casa Barrio Dalvian',
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          pw.SizedBox(height: 20),
-          _pdfSectionTitle('TRABAJOS A REALIZAR', blue),
-          pw.SizedBox(height: 8),
-          _pdfBullet('Proteccion de pisos y muebles.'),
-          _pdfBullet('Tapado de pequenas imperfecciones.'),
-          _pdfBullet('Lijado donde sea necesario.'),
-          _pdfBullet('Aplicacion de 2 manos de pintura latex.'),
-          _pdfBullet('Limpieza final de la obra.'),
-
-          pw.SizedBox(height: 18),
-          _pdfSectionTitle('MATERIALES APROXIMADOS', blue),
-          pw.SizedBox(height: 8),
-          _pdfBullet('Pintura latex.'),
-          _pdfBullet('Enduido.'),
-          _pdfBullet('Lijas.'),
-          _pdfBullet('Cinta de papel.'),
-
-          pw.SizedBox(height: 18),
-          _pdfSectionTitle('ACLARACIONES', blue),
-          pw.SizedBox(height: 8),
           pw.Container(
             width: double.infinity,
             padding: const pw.EdgeInsets.all(12),
             decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColor.fromHex('#D9E1EA')),
+              color: lightBlue,
               borderRadius: pw.BorderRadius.circular(8),
             ),
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(
-                  'Los materiales seran provistos por el cliente.',
-                  style: const pw.TextStyle(fontSize: 10),
-                ),
-                pw.SizedBox(height: 5),
-                pw.Text(
-                  'Todo trabajo que se realice fuera de este presupuesto se cobrara aparte.',
-                  style: const pw.TextStyle(fontSize: 10),
-                ),
+                if (d.client.isNotEmpty)
+                  pw.Text('Cliente: ${d.client}'),
+                if (d.place.isNotEmpty) pw.Text('Obra: ${d.place}'),
+                if (d.workType.isNotEmpty)
+                  pw.Text('Tipo de trabajo: ${d.workType}'),
               ],
             ),
           ),
-
-          pw.SizedBox(height: 22),
-          pw.Container(
-            width: double.infinity,
-            padding: const pw.EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-            decoration: pw.BoxDecoration(
-              color: lightBlue,
-              borderRadius: pw.BorderRadius.circular(8),
-            ),
-            child: pw.Row(
-              children: [
-                pw.Text(
-                  'TOTAL',
-                  style: pw.TextStyle(
-                    color: blue,
-                    fontSize: 15,
-                    fontWeight: pw.FontWeight.bold,
+          if (d.jobs.isNotEmpty) ...[
+            pw.SizedBox(height: 18),
+            _pdfTitle('TRABAJOS A REALIZAR', blue),
+            pw.SizedBox(height: 8),
+            pw.Text(d.jobs),
+          ],
+          if (d.materials.isNotEmpty) ...[
+            pw.SizedBox(height: 18),
+            _pdfTitle('MATERIALES APROXIMADOS', blue),
+            pw.SizedBox(height: 8),
+            pw.Text(d.materials),
+          ],
+          if (d.notes.isNotEmpty) ...[
+            pw.SizedBox(height: 18),
+            _pdfTitle('ACLARACIONES', blue),
+            pw.SizedBox(height: 8),
+            pw.Text(d.notes),
+          ],
+          if (d.total.isNotEmpty) ...[
+            pw.SizedBox(height: 22),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(14),
+              decoration: pw.BoxDecoration(
+                color: lightBlue,
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Row(
+                children: [
+                  pw.Text(
+                    'TOTAL',
+                    style: pw.TextStyle(
+                      color: blue,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
                   ),
-                ),
-                pw.Spacer(),
-                pw.Text(
-                  total,
-                  style: pw.TextStyle(
-                    color: blue,
-                    fontSize: 20,
-                    fontWeight: pw.FontWeight.bold,
+                  pw.Spacer(),
+                  pw.Text(
+                    '\$${d.total}',
+                    style: pw.TextStyle(
+                      color: blue,
+                      fontSize: 20,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-
-          pw.SizedBox(height: 22),
-          pw.Text(
-            'Presupuesto valido por 15 dias.',
-            style: pw.TextStyle(
-              color: grey,
-              fontSize: 9,
-            ),
-          ),
-          pw.SizedBox(height: 5),
-          pw.Text(
-            'Gracias por confiar en nuestro trabajo.',
-            style: pw.TextStyle(
-              color: grey,
-              fontSize: 9,
-            ),
-          ),
-          pw.SizedBox(height: 24),
+          ],
+          pw.SizedBox(height: 28),
           pw.Align(
             alignment: pw.Alignment.center,
             child: pw.Text(
               'Generado con PintaM2',
-              style: pw.TextStyle(
-                color: PdfColor.fromHex('#A8B3C2'),
-                fontSize: 8,
-              ),
+              style: pw.TextStyle(color: grey, fontSize: 8),
             ),
           ),
         ],
@@ -1517,30 +1821,7 @@ class BudgetPreviewScreen extends StatelessWidget {
     return pdf.save();
   }
 
-  static pw.Widget _pdfInfoBlock(String label, String value) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          label,
-          style: pw.TextStyle(
-            fontSize: 8,
-            color: PdfColor.fromHex('#5B6573'),
-          ),
-        ),
-        pw.SizedBox(height: 3),
-        pw.Text(
-          value,
-          style: pw.TextStyle(
-            fontSize: 11,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
-
-  static pw.Widget _pdfSectionTitle(String text, PdfColor color) {
+  static pw.Widget _pdfTitle(String text, PdfColor color) {
     return pw.Text(
       text,
       style: pw.TextStyle(
@@ -1551,74 +1832,54 @@ class BudgetPreviewScreen extends StatelessWidget {
     );
   }
 
-  static pw.Widget _pdfBullet(String text) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 5),
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text('-  ', style: const pw.TextStyle(fontSize: 10)),
-          pw.Expanded(
-            child: pw.Text(
-              text,
-              style: const pw.TextStyle(fontSize: 10),
-            ),
-          ),
-        ],
-      ),
+  Future<void> _saveBudget() async {
+    if (saving) return;
+    setState(() => saving = true);
+
+    final d = widget.draft;
+    final data = BudgetData(
+      id: d.id,
+      number: d.number,
+      client: d.client,
+      place: d.place,
+      workType: d.workType,
+      measurements: d.measurements,
+      jobs: d.jobs,
+      materials: d.materials,
+      notes: d.notes,
+      total: d.total,
+      status: 'Pendiente',
+      createdAt: DateTime.now().toIso8601String(),
     );
-  }
 
-  static String _pdfDate() {
-    final now = DateTime.now();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(now.day)}/${two(now.month)}/${now.year}';
-  }
+    await widget.store.saveBudget(data);
 
-  String get _fileName {
-    final safe = number.replaceAll(RegExp(r'[^0-9A-Za-z_-]'), '_');
-    return 'PintaM2_Presupuesto_$safe.pdf';
-  }
-
-  Future<void> _sharePdf(BuildContext context) async {
-    try {
-      final bytes = await _buildPdf();
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: _fileName,
-      );
-    } catch (e) {
-      if (!context.mounted) return;
+    if (mounted) {
+      setState(() => saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo compartir el PDF: $e')),
+        const SnackBar(content: Text('Presupuesto guardado')),
       );
     }
   }
 
-  Future<void> _printPdf(BuildContext context) async {
-    try {
-      await Printing.layoutPdf(
-        name: _fileName,
-        onLayout: (_) => _buildPdf(),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo abrir la impresion: $e')),
-      );
-    }
+  Future<void> _sharePdf() async {
+    final bytes = await _buildPdf();
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: 'PintaM2_${widget.draft.number}.pdf',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Presupuesto'),
+        title: const Text('Vista previa'),
         actions: [
-          IconButton(
-            tooltip: 'Compartir',
-            onPressed: () => _sharePdf(context),
-            icon: const Icon(Icons.share_outlined),
+          TextButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Editar'),
           ),
         ],
       ),
@@ -1627,10 +1888,10 @@ class BudgetPreviewScreen extends StatelessWidget {
           Expanded(
             child: PdfPreview(
               build: (_) => _buildPdf(),
-              canChangePageFormat: false,
               canChangeOrientation: false,
+              canChangePageFormat: false,
               canDebug: false,
-              pdfFileName: _fileName,
+              pdfFileName: 'PintaM2_${widget.draft.number}.pdf',
             ),
           ),
           SafeArea(
@@ -1641,17 +1902,17 @@ class BudgetPreviewScreen extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _printPdf(context),
-                      icon: const Icon(Icons.print_outlined),
-                      label: const Text('Guardar / imprimir'),
+                      onPressed: saving ? null : _saveBudget,
+                      icon: const Icon(Icons.save_outlined),
+                      label: Text(saving ? 'Guardando...' : 'Guardar'),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () => _sharePdf(context),
-                      icon: const Icon(Icons.send_rounded),
-                      label: const Text('Enviar por WhatsApp'),
+                      onPressed: _sharePdf,
+                      icon: const Icon(Icons.share_outlined),
+                      label: const Text('WhatsApp'),
                     ),
                   ),
                 ],
