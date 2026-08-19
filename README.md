@@ -15,3 +15,8 @@ Se mantiene la base de la v0.7 y se modifican solamente los puntos solicitados:
 - Más: copia de seguridad y restauración de datos para cambio de celular.
 
 Los datos de la v0.7 se conservan usando las mismas claves de almacenamiento.
+
+## v0.8.1
+- ID de paquete fijo: `com.pintam2.app`.
+- Workflow preparado para firma estable con GitHub Secrets.
+- Artefacto: `PintaM2-v0.8.1-APK`.

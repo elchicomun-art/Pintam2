@@ -1,0 +1,23 @@
+PintaM² v0.8.1 - firma estable
+
+Esta versión fija el ID de paquete en:
+com.pintam2.app
+
+Para que TODAS las versiones futuras puedan actualizarse sin desinstalar,
+hay que configurar una sola vez estos GitHub Secrets:
+
+PINTAM2_KEYSTORE_BASE64
+PINTAM2_KEYSTORE_PASSWORD
+PINTAM2_KEY_ALIAS
+PINTAM2_KEY_PASSWORD
+
+IMPORTANTE:
+La APK que ya está instalada en el teléfono puede estar firmada con otra clave.
+Android no permite reemplazar una app firmada con una clave distinta.
+
+Puede hacer falta UNA ÚNICA transición:
+1. Exportar/guardar los datos desde la versión instalada.
+2. Desinstalar esa versión.
+3. Instalar la primera APK firmada con la clave estable.
+4. Restaurar los datos.
+5. Desde entonces, las futuras versiones podrán instalarse encima.
