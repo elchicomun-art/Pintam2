@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pdf/pdf.dart';
@@ -2454,91 +2457,144 @@ class BackupScreen extends StatefulWidget {
 }
 
 class _BackupScreenState extends State<BackupScreen> {
-  final restoreCtrl = TextEditingController();
+  bool busy = false;
+  String lastBackup = '';
 
-  @override
-  void dispose() {
-    restoreCtrl.dispose();
-    super.dispose();
+  Future<void> exportFile() async {
+    setState(() => busy = true);
+    try {
+      final now = DateTime.now();
+      final stamp =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_'
+          '${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}';
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/PintaM2_Backup_$stamp.json');
+      await file.writeAsString(AppStore.instance.backupJson(), flush: true);
+
+      if (!mounted) return;
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'Copia de seguridad PintaM²',
+        text: 'Copia de seguridad de PintaM². Guardala en un lugar seguro.',
+      );
+      setState(() => lastBackup =
+          '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year} '
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo exportar la copia: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> importFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    if (result == null || result.files.single.path == null) return;
+
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Importar copia'),
+        content: const Text(
+          'La copia reemplazará los datos actuales de PintaM². '
+          'Conviene exportar una copia actual antes de continuar.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Importar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => busy = true);
+    try {
+      final raw = await File(result.files.single.path!).readAsString();
+      await AppStore.instance.restoreBackup(raw);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Datos restaurados correctamente.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('La copia no se pudo importar: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Exportar / guardar datos')),
+        appBar: AppBar(title: const Text('Copia de seguridad')),
         body: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const Text(
-              'Copia de seguridad',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Podés copiar todos los datos de PintaM² y guardarlos en un mensaje, nota o archivo. '
-              'En otro celular pegás esa copia acá para restaurarla.',
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: () async {
-                final backup = AppStore.instance.backupJson();
-                await Clipboard.setData(ClipboardData(text: backup));
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Copia de seguridad copiada')),
-                  );
-                }
-              },
-              icon: const Icon(Icons.copy_all_outlined),
-              label: const Text('Copiar copia de seguridad'),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Restaurar datos',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: restoreCtrl,
-              minLines: 5,
-              maxLines: 10,
-              decoration: const InputDecoration(
-                labelText: 'Pegá acá la copia de seguridad',
-                alignLabelWithHint: true,
-              ),
-            ),
+            const Icon(Icons.cloud_done_outlined, size: 64),
             const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final clip = await Clipboard.getData('text/plain');
-                if (clip?.text != null) restoreCtrl.text = clip!.text!;
-              },
-              icon: const Icon(Icons.content_paste),
-              label: const Text('Pegar desde portapapeles'),
+            const Text(
+              'Protegé los datos de PintaM²',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'La copia incluye clientes, trabajos, colores y fórmulas, '
+              'presupuestos, turnos, precios y configuración.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 22),
+            FilledButton.icon(
+              onPressed: busy ? null : exportFile,
+              icon: const Icon(Icons.file_upload_outlined),
+              label: const Text('Exportar datos'),
             ),
             const SizedBox(height: 10),
-            FilledButton.icon(
-              onPressed: () async {
-                try {
-                  await AppStore.instance.restoreBackup(restoreCtrl.text.trim());
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Datos restaurados correctamente')),
-                  );
-                  Navigator.pop(context);
-                } catch (_) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('La copia no es válida')),
-                  );
-                }
-              },
-              icon: const Icon(Icons.restore),
-              label: const Text('Restaurar copia'),
+            OutlinedButton.icon(
+              onPressed: busy ? null : importFile,
+              icon: const Icon(Icons.file_download_outlined),
+              label: const Text('Importar datos'),
+            ),
+            if (lastBackup.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Última copia creada: $lastBackup',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+            const SizedBox(height: 16),
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(14),
+                child: Text(
+                  'Consejo: guardá el archivo .json en Google Drive, correo '
+                  'o en otra ubicación fuera del teléfono.',
+                ),
+              ),
             ),
           ],
         ),
       );
 }
+
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
