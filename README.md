@@ -1,16 +1,17 @@
-# PintaM² v0.7 - prueba
+# PintaM² v0.8 - prueba
 
-Cambios principales:
-- Se elimina Plantillas.
-- Nuevo módulo Colores / códigos por cliente.
-- Preparaciones y fórmulas de color guardadas por cliente.
-- Calculadora avanzada por sector y pared, con suma automática de m².
-- También permite cargar m² directamente por sector.
-- El total sugerido del presupuesto usa m² × precio configurado del trabajo.
-- Materiales aproximados con opciones rápidas y cantidades.
-- Logo de la empresa centrado y más grande en el PDF.
-- Presupuestos: editar, eliminar y cambiar estado Pendiente/Aceptado/Rechazado.
-- Historial con estados y total ganado por mes usando presupuestos aceptados.
-- Nuevo icono de aplicación PintaM².
+Se mantiene la base de la v0.7 y se modifican solamente los puntos solicitados:
 
-Esta sigue siendo una versión de prueba para continuar puliendo el flujo.
+- Nuevo presupuesto, pantalla 2: opción para guardar el cliente ingresado.
+- Pantalla 8: botón Finalizar presupuesto y frases preestablecidas editables/seleccionables.
+- PDF: empresa a la izquierda, logo centrado, número a la derecha y fecha debajo.
+- Calculadora por sectores: precio opcional para cada sector y suma total de precios.
+- Pantalla 7: solamente empresa y logo.
+- Pantalla 4: precio sugerido más grande.
+- Clientes: vuelve el buscador y cada cliente puede agrupar varios trabajos/lugares.
+- Presupuestos: icono visual de Aceptado, Pendiente o Rechazado.
+- Colores/códigos: buscador de clientes y códigos agrupados por sector.
+- Calculadora: botón pequeño para copiar los m².
+- Más: copia de seguridad y restauración de datos para cambio de celular.
+
+Los datos de la v0.7 se conservan usando las mismas claves de almacenamiento.
