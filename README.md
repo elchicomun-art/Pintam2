@@ -35,3 +35,13 @@ Nota: los recordatorios quedan guardados y señalados dentro de PintaM² en esta
 - Calculadora de materiales con m², manos y rendimiento editable.
 - Accesos Calculadora y Materiales dentro de la calculadora por sectores.
 - Se mantiene `assets/app_icon.png` como icono Android de PintaM².
+
+## v0.9.4
+- Vuelve el zoom en la vista previa del presupuesto.
+- Vuelve el botón Volver al inicio.
+- Las aclaraciones se muestran al pie de la última hoja del presupuesto.
+- Calculadora tradicional con historial arriba, resultado debajo y teclado ordenado.
+- Botón de borrar último dígito en la calculadora.
+- Calculadora de materiales permite agregar materiales personalizados.
+- Rendimientos editados y materiales nuevos quedan guardados.
+- Se mantiene assets/app_icon.png como icono Android de PintaM².

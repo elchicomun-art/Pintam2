@@ -1152,7 +1152,11 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
 
   String formatNumber(double value) {
     if (value == value.truncateToDouble()) return value.toStringAsFixed(0);
-    return value.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '').replaceAll('.', ',');
+    return value
+        .toStringAsFixed(2)
+        .replaceAll(RegExp(r'0+$'), '')
+        .replaceAll(RegExp(r'\.$'), '')
+        .replaceAll('.', ',');
   }
 
   void inputDigit(String digit) {
@@ -1179,6 +1183,19 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
     });
   }
 
+  void backspace() {
+    setState(() {
+      if (replaceDisplay) return;
+      if (display.length <= 1) {
+        display = '0';
+        replaceDisplay = true;
+      } else {
+        display = display.substring(0, display.length - 1);
+      }
+      expression = _composeExpression();
+    });
+  }
+
   String _composeExpression() {
     if (first != null && operation != null) {
       return '${formatNumber(first!)} $operation ${replaceDisplay ? '' : display}'.trimRight();
@@ -1200,11 +1217,16 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
 
   double _apply(double a, String op, double b) {
     switch (op) {
-      case '+': return a + b;
-      case '-': return a - b;
-      case '×': return a * b;
-      case '÷': return b == 0 ? 0 : a / b;
-      default: return b;
+      case '+':
+        return a + b;
+      case '-':
+        return a - b;
+      case '×':
+        return a * b;
+      case '÷':
+        return b == 0 ? 0 : a / b;
+      default:
+        return b;
     }
   }
 
@@ -1215,7 +1237,7 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
     final op = operation!;
     final result = _apply(a, op, second);
     final line = '${formatNumber(a)} $op ${formatNumber(second)} = ${formatNumber(result)}';
-    if (addToHistory) history.insert(0, line);
+    if (addToHistory) history.add(line);
     display = formatNumber(result);
     expression = line;
     first = null;
@@ -1257,7 +1279,10 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
           ),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
           FilledButton(
             onPressed: () {
               final l = double.tryParse(largo.text.replaceAll(',', '.')) ?? 0;
@@ -1269,10 +1294,11 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
         ],
       ),
     );
+
     if (result != null) {
       setState(() {
         final line = 'M²: ${formatNumber(result)}';
-        history.insert(0, line);
+        history.add(line);
         display = formatNumber(result);
         expression = line;
         replaceDisplay = true;
@@ -1280,8 +1306,14 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
     }
   }
 
-  Widget keyButton(String text, {VoidCallback? onPressed, bool strong = false}) {
+  Widget keyButton(
+    String text, {
+    VoidCallback? onPressed,
+    bool strong = false,
+    int flex = 1,
+  }) {
     return Expanded(
+      flex: flex,
       child: Padding(
         padding: const EdgeInsets.all(4),
         child: strong
@@ -1291,7 +1323,10 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
                   minimumSize: const Size.fromHeight(58),
                   padding: EdgeInsets.zero,
                 ),
-                child: Text(text, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w700)),
+                child: Text(
+                  text,
+                  style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w700),
+                ),
               )
             : FilledButton.tonal(
                 onPressed: onPressed,
@@ -1299,7 +1334,10 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
                   minimumSize: const Size.fromHeight(58),
                   padding: EdgeInsets.zero,
                 ),
-                child: Text(text, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w600)),
+                child: Text(
+                  text,
+                  style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w600),
+                ),
               ),
       ),
     );
@@ -1312,82 +1350,107 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
       body: SafeArea(
         child: Column(
           children: [
-            // Historial ocupa el espacio superior disponible.
+            // Historial arriba: los cálculos nuevos van quedando abajo
+            // y los anteriores "suben", como una calculadora real.
             Expanded(
-              child: Column(children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 6),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text(
-                      expression.isEmpty ? ' ' : expression,
-                      maxLines: 2,
-                      textAlign: TextAlign.right,
-                      style: TextStyle(fontSize: 17, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 4),
-                    SelectableText(
-                      display,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(fontSize: 42, fontWeight: FontWeight.w900),
-                    ),
-                  ]),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: history.isEmpty
-                      ? const Center(child: Text('El historial de cálculos aparecerá acá.'))
-                      : ListView.separated(
-                          reverse: false,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          itemCount: history.length,
-                          separatorBuilder: (_, __) => const Divider(height: 8),
-                          itemBuilder: (_, i) => Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(history[i], style: const TextStyle(fontSize: 16)),
+              child: history.isEmpty
+                  ? Center(
+                      child: Text(
+                        'El historial aparecerá acá',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+                      itemCount: history.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 6),
+                      itemBuilder: (_, i) => Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          history[i],
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
-                ),
-              ]),
+                      ),
+                    ),
             ),
-            // Teclado queda siempre pegado al borde inferior.
+
+            // Operación actual y resultado justo encima del teclado.
             Container(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
+                border: Border(
+                  top: BorderSide(color: Theme.of(context).dividerColor),
+                ),
               ),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Row(children: [
-                  keyButton('C', onPressed: clearAll),
-                  keyButton('M²', onPressed: quickM2, strong: true),
-                  keyButton('÷', onPressed: () => setOperation('÷')),
-                  keyButton('×', onPressed: () => setOperation('×')),
-                ]),
-                Row(children: [
-                  keyButton('7', onPressed: () => inputDigit('7')),
-                  keyButton('8', onPressed: () => inputDigit('8')),
-                  keyButton('9', onPressed: () => inputDigit('9')),
-                  keyButton('-', onPressed: () => setOperation('-')),
-                ]),
-                Row(children: [
-                  keyButton('4', onPressed: () => inputDigit('4')),
-                  keyButton('5', onPressed: () => inputDigit('5')),
-                  keyButton('6', onPressed: () => inputDigit('6')),
-                  keyButton('+', onPressed: () => setOperation('+')),
-                ]),
-                Row(children: [
-                  keyButton('1', onPressed: () => inputDigit('1')),
-                  keyButton('2', onPressed: () => inputDigit('2')),
-                  keyButton('3', onPressed: () => inputDigit('3')),
-                  keyButton('=', onPressed: equals, strong: true),
-                ]),
-                Row(children: [
-                  keyButton('0', onPressed: () => inputDigit('0')),
-                  keyButton(',', onPressed: inputDecimal),
-                  const Spacer(flex: 2),
-                ]),
-              ]),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    expression.isEmpty ? ' ' : expression,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 17,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  SelectableText(
+                    display,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      fontSize: 42,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Teclado ordenado y pegado al borde inferior.
+            Container(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+              color: Theme.of(context).colorScheme.surface,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(children: [
+                    keyButton('C', onPressed: clearAll),
+                    keyButton('M²', onPressed: quickM2, strong: true),
+                    keyButton('÷', onPressed: () => setOperation('÷')),
+                    keyButton('×', onPressed: () => setOperation('×')),
+                  ]),
+                  Row(children: [
+                    keyButton('7', onPressed: () => inputDigit('7')),
+                    keyButton('8', onPressed: () => inputDigit('8')),
+                    keyButton('9', onPressed: () => inputDigit('9')),
+                    keyButton('-', onPressed: () => setOperation('-')),
+                  ]),
+                  Row(children: [
+                    keyButton('4', onPressed: () => inputDigit('4')),
+                    keyButton('5', onPressed: () => inputDigit('5')),
+                    keyButton('6', onPressed: () => inputDigit('6')),
+                    keyButton('+', onPressed: () => setOperation('+')),
+                  ]),
+                  Row(children: [
+                    keyButton('1', onPressed: () => inputDigit('1')),
+                    keyButton('2', onPressed: () => inputDigit('2')),
+                    keyButton('3', onPressed: () => inputDigit('3')),
+                    keyButton('=', onPressed: equals, strong: true),
+                  ]),
+                  Row(children: [
+                    keyButton('0', onPressed: () => inputDigit('0'), flex: 2),
+                    keyButton(',', onPressed: inputDecimal),
+                    keyButton('⌫', onPressed: backspace),
+                  ]),
+                ],
+              ),
             ),
           ],
         ),
@@ -1403,13 +1466,13 @@ class MaterialsCalculatorScreen extends StatefulWidget {
 }
 
 class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
+  static const _storageKey = 'pintam2_material_yields_v094';
+
   final area = TextEditingController();
   final coats = TextEditingController(text: '2');
-  final yield = TextEditingController(text: '10');
-  String material = 'Látex interior';
-  double? result;
+  final yieldCtrl = TextEditingController(text: '10');
 
-  final Map<String, double> defaultYield = const {
+  Map<String, double> materials = {
     'Látex interior': 10,
     'Látex exterior': 10,
     'Esmalte sintético': 12,
@@ -1417,20 +1480,170 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
     'Membrana líquida': 4,
   };
 
-  String get unit => material == 'Membrana líquida' ? 'L aprox.' : 'L aprox.';
+  String material = 'Látex interior';
+  double? result;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMaterials();
+  }
+
+  Future<void> _loadMaterials() async {
+    final sp = await SharedPreferences.getInstance();
+    final raw = sp.getString(_storageKey);
+    if (raw == null) return;
+    try {
+      final decoded = Map<String, dynamic>.from(jsonDecode(raw));
+      final loaded = <String, double>{};
+      for (final e in decoded.entries) {
+        loaded[e.key] = (e.value as num).toDouble();
+      }
+      if (loaded.isNotEmpty && mounted) {
+        setState(() {
+          materials = loaded;
+          if (!materials.containsKey(material)) material = materials.keys.first;
+          yieldCtrl.text = materials[material]!.toStringAsFixed(0);
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveMaterials() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString(_storageKey, jsonEncode(materials));
+  }
 
   void calculate() {
     final m2 = double.tryParse(area.text.replaceAll(',', '.')) ?? 0;
     final hands = double.tryParse(coats.text.replaceAll(',', '.')) ?? 0;
-    final performance = double.tryParse(yield.text.replaceAll(',', '.')) ?? 0;
+    final performance = double.tryParse(yieldCtrl.text.replaceAll(',', '.')) ?? 0;
+
+    if (performance > 0) {
+      materials[material] = performance;
+      _saveMaterials();
+    }
+
     setState(() {
       result = performance <= 0 ? 0 : (m2 * hands) / performance;
     });
   }
 
+  Future<void> addMaterial() async {
+    final name = TextEditingController();
+    final rendimiento = TextEditingController();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Agregar material'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: name,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Nombre',
+                hintText: 'Ej.: Fijador, impermeabilizante...',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: rendimiento,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Rendimiento',
+                suffixText: 'm²/L',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved == true) {
+      final n = name.text.trim();
+      final r = double.tryParse(rendimiento.text.replaceAll(',', '.')) ?? 0;
+      if (n.isNotEmpty && r > 0) {
+        setState(() {
+          materials[n] = r;
+          material = n;
+          yieldCtrl.text = r.toStringAsFixed(r == r.truncateToDouble() ? 0 : 2);
+          result = null;
+        });
+        await _saveMaterials();
+      }
+    }
+  }
+
+  Future<void> deleteCurrentMaterial() async {
+    // Protegemos los cinco materiales iniciales.
+    const protected = {
+      'Látex interior',
+      'Látex exterior',
+      'Esmalte sintético',
+      'Barniz',
+      'Membrana líquida',
+    };
+    if (protected.contains(material)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Este material base no se puede eliminar.')),
+      );
+      return;
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar material'),
+        content: Text('¿Eliminar "$material" de la calculadora?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      setState(() {
+        materials.remove(material);
+        material = materials.keys.first;
+        yieldCtrl.text = materials[material]!.toStringAsFixed(0);
+        result = null;
+      });
+      await _saveMaterials();
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Calculadora de materiales')),
+        appBar: AppBar(
+          title: const Text('Calculadora de materiales'),
+          actions: [
+            IconButton(
+              tooltip: 'Agregar material',
+              onPressed: addMaterial,
+              icon: const Icon(Icons.add_circle_outline),
+            ),
+          ],
+        ),
         body: ListView(
           padding: const EdgeInsets.all(20),
           children: [
@@ -1440,29 +1653,49 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'La fórmula es: m² × manos ÷ rendimiento. Podés cambiar el rendimiento según la pintura que uses.',
+              'Fórmula: m² × manos ÷ rendimiento. Los rendimientos que modifiques '
+              'y los materiales que agregues quedan guardados.',
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              value: material,
-              decoration: const InputDecoration(labelText: 'Material'),
-              items: defaultYield.keys
-                  .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                  .toList(),
-              onChanged: (v) {
-                if (v == null) return;
-                setState(() {
-                  material = v;
-                  yield.text = defaultYield[v]!.toStringAsFixed(0);
-                  result = null;
-                });
-              },
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: material,
+                    decoration: const InputDecoration(labelText: 'Material'),
+                    items: materials.keys
+                        .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() {
+                        material = v;
+                        final r = materials[v]!;
+                        yieldCtrl.text = r.toStringAsFixed(
+                          r == r.truncateToDouble() ? 0 : 2,
+                        );
+                        result = null;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  tooltip: 'Agregar material',
+                  onPressed: addMaterial,
+                  icon: const Icon(Icons.add),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             TextField(
               controller: area,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Superficie', suffixText: 'm²'),
+              decoration: const InputDecoration(
+                labelText: 'Superficie',
+                suffixText: 'm²',
+              ),
             ),
             const SizedBox(height: 12),
             Row(children: [
@@ -1476,13 +1709,46 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: TextField(
-                  controller: yield,
+                  controller: yieldCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Rendimiento', suffixText: 'm²/L'),
+                  decoration: const InputDecoration(
+                    labelText: 'Rendimiento',
+                    suffixText: 'm²/L',
+                  ),
                 ),
               ),
             ]),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final r = double.tryParse(
+                          yieldCtrl.text.replaceAll(',', '.'),
+                        ) ??
+                        0;
+                    if (r > 0) {
+                      materials[material] = r;
+                      await _saveMaterials();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Rendimiento guardado')),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Guardar rendimiento'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Eliminar material personalizado',
+                onPressed: deleteCurrentMaterial,
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ]),
+            const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: calculate,
               icon: const Icon(Icons.calculate_outlined),
@@ -1493,19 +1759,28 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(20),
-                  child: Column(children: [
-                    Text(material, style: const TextStyle(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 6),
-                    SelectableText(
-                      '${result!.toStringAsFixed(2)} $unit',
-                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${area.text.isEmpty ? '0' : area.text} m² × ${coats.text} manos ÷ ${yield.text} m²/L',
-                      textAlign: TextAlign.center,
-                    ),
-                  ]),
+                  child: Column(
+                    children: [
+                      Text(
+                        material,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 6),
+                      SelectableText(
+                        '${result!.toStringAsFixed(2)} L aprox.',
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${area.text.isEmpty ? '0' : area.text} m² × '
+                        '${coats.text} manos ÷ ${yieldCtrl.text} m²/L',
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -2537,7 +2812,39 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(36),
+        margin: const pw.EdgeInsets.fromLTRB(36, 36, 36, 120),
+        footer: (ctx) {
+          if (b.notes.isEmpty || ctx.pageNumber != ctx.pagesCount) {
+            return pw.SizedBox();
+          }
+          return pw.Container(
+            padding: const pw.EdgeInsets.only(top: 8),
+            decoration: pw.BoxDecoration(
+              border: pw.Border(
+                top: pw.BorderSide(color: PdfColor.fromHex('#D7EAF4'), width: 1),
+              ),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                section('ACLARACIONES', blue),
+                pw.SizedBox(height: 4),
+                ...b.notes
+                    .split('\n')
+                    .where((e) => e.trim().isNotEmpty)
+                    .map(
+                      (e) => pw.Padding(
+                        padding: const pw.EdgeInsets.only(bottom: 3),
+                        child: pw.Text(
+                          e.trim(),
+                          style: const pw.TextStyle(fontSize: 8.5),
+                        ),
+                      ),
+                    ),
+              ],
+            ),
+          );
+        },
         build: (_) => [
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -2612,22 +2919,6 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
               (e) => pw.Text('- ${e.key}: ${e.value} ${materialUnit(e.key)}'),
             ),
             if (b.extraMaterials.isNotEmpty) pw.Text(b.extraMaterials),
-          ],
-          if (b.notes.isNotEmpty) ...[
-            pw.SizedBox(height: 16),
-            section('ACLARACIONES', blue),
-            ...b.notes.split('\n').where((e) => e.trim().isNotEmpty).map(
-                  (e) => pw.Container(
-                    margin: const pw.EdgeInsets.only(bottom: 5),
-                    padding: const pw.EdgeInsets.only(left: 8),
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border(
-                        left: pw.BorderSide(color: blue, width: 2),
-                      ),
-                    ),
-                    child: pw.Text(e.trim()),
-                  ),
-                ),
           ],
           pw.SizedBox(height: 22),
           pw.Container(
@@ -2722,25 +3013,47 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
       ),
       body: Column(children: [
         Expanded(
-          child: PdfPreview(
-            build: (_) => buildPdf(),
-            canChangePageFormat: false,
-            canChangeOrientation: false,
-            canDebug: false,
-            pdfFileName: 'PintaM2_${b.number}.pdf',
+          child: InteractiveViewer(
+            minScale: 1,
+            maxScale: 4,
+            boundaryMargin: const EdgeInsets.all(80),
+            child: PdfPreview(
+              build: (_) => buildPdf(),
+              canChangePageFormat: false,
+              canChangeOrientation: false,
+              canDebug: false,
+              pdfFileName: 'PintaM2_${b.number}.pdf',
+            ),
           ),
         ),
         SafeArea(
           top: false,
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: FilledButton.icon(
-              onPressed: () async => Printing.sharePdf(
-                bytes: await buildPdf(),
-                filename: 'PintaM2_${b.number}.pdf',
-              ),
-              icon: const Icon(Icons.share_outlined),
-              label: const Text('Compartir PDF'),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      pintaGoHome?.call();
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    },
+                    icon: const Icon(Icons.home_outlined),
+                    label: const Text('Volver al inicio'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () async => Printing.sharePdf(
+                      bytes: await buildPdf(),
+                      filename: 'PintaM2_${b.number}.pdf',
+                    ),
+                    icon: const Icon(Icons.share_outlined),
+                    label: const Text('Compartir PDF'),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
