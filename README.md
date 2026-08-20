@@ -1,19 +1,20 @@
-# PintaM² v0.10 - versión de prueba
+# PintaM² v0.11 - prueba
 
-Se mantiene la base de la v0.9.2 y se agregan las mejoras solicitadas:
+Se mantiene la base de la v0.10 y se modifican solamente estos puntos:
 
-- Frases/aclaraciones editadas se guardan para próximos presupuestos.
-- Vista previa con zoom y botón Volver al inicio.
-- Cliente > Trabajo/Lugar > Colores y códigos usados en ese trabajo.
-- Mismo flujo en Colores / códigos.
-- Calculadora tradicional rápida con botón M².
-- Turnos, calendario y recordatorios internos editables.
-- Encabezado PintaM² rediseñado y centrado.
-- Presupuesto PDF con presentación más profesional.
-- Inicio muestra pendientes sobre cantidad total de presupuestos.
-- Papelera por 7 días con restaurar, eliminar definitivamente y vaciar.
-- Más simplificado, sin accesos duplicados del Inicio.
-- Guardado automático del borrador de presupuesto.
-- Clientes con DNI, CUIL y teléfono elegible desde la agenda.
-- Se mantiene copia de seguridad por archivo JSON.
-- Se mantiene el logo PintaM² como icono de la app.
+- Calendario y selectores de fecha de Material en español (es-AR).
+- Encabezado PintaM² rediseñado: nombre más grande con recursos visuales de rodillo/pincel.
+- Calculadora tradicional más compacta, clara y rápida; botón M² rápido.
+- PDF:
+  - se elimina Obra;
+  - se elimina Superficie;
+  - aclaraciones al final en un recuadro;
+  - importe total en negro;
+  - marca PintaM² más grande.
+- Agenda de contactos:
+  - solicitud robusta de permisos;
+  - selector nativo de Android;
+  - lectura del nombre y teléfono;
+  - acceso directo a Ajustes si el permiso fue rechazado.
+
+No se modifican las demás funciones de la v0.10.

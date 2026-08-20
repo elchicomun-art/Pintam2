@@ -1,13 +1,15 @@
 name: pintam2
 description: PintaM² - app profesional para pintores.
 publish_to: "none"
-version: 0.10.0+13
+version: 0.11.0+14
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
   pdf: ^3.13.0
   printing: ^5.15.0

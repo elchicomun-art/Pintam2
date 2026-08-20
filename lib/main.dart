@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -331,6 +332,12 @@ class _PintaM2AppState extends State<PintaM2App> {
     return MaterialApp(
       title: 'PintaM²',
       debugShowCheckedModeBanner: false,
+      locale: const Locale('es', 'AR'),
+      supportedLocales: const [
+        Locale('es', 'AR'),
+        Locale('es'),
+      ],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       themeMode: mode,
       theme: ThemeData(
         useMaterial3: true,
@@ -480,9 +487,54 @@ class _MainShellState extends State<MainShell>{
       NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home),label:'Inicio'),NavigationDestination(icon:Icon(Icons.people_outline),selectedIcon:Icon(Icons.people),label:'Clientes'),NavigationDestination(icon:Icon(Icons.description_outlined),selectedIcon:Icon(Icons.description),label:'Presupuestos'),NavigationDestination(icon:Icon(Icons.more_horiz),label:'Más')]),));
 }
 
-class BrandAppBar extends StatelessWidget implements PreferredSizeWidget{
-  const BrandAppBar({super.key}); @override Size get preferredSize=>const Size.fromHeight(72);
-  @override Widget build(BuildContext context)=>AppBar(toolbarHeight:72,centerTitle:true,title:SizedBox(height:62,child:Stack(alignment:Alignment.center,children:[Opacity(opacity:.11,child:Image.asset('assets/app_icon.png',width:66,height:66)),Text('PintaM²',style:TextStyle(fontSize:27,fontWeight:FontWeight.w900,letterSpacing:.4,color:Theme.of(context).colorScheme.primary))])));
+class BrandAppBar extends StatelessWidget implements PreferredSizeWidget {
+  const BrandAppBar({super.key});
+
+  @override
+  Size get preferredSize => const Size.fromHeight(76);
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return AppBar(
+      toolbarHeight: 76,
+      centerTitle: true,
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Transform.rotate(
+            angle: -0.15,
+            child: Icon(Icons.format_paint_rounded, size: 31, color: primary),
+          ),
+          const SizedBox(width: 2),
+          Text(
+            'P',
+            style: TextStyle(
+              fontSize: 32,
+              height: 1,
+              fontWeight: FontWeight.w900,
+              color: primary,
+            ),
+          ),
+          Text(
+            'intaM²',
+            style: TextStyle(
+              fontSize: 30,
+              height: 1,
+              fontWeight: FontWeight.w900,
+              letterSpacing: .2,
+              color: primary,
+            ),
+          ),
+          const SizedBox(width: 2),
+          Transform.rotate(
+            angle: 0.10,
+            child: Icon(Icons.brush_rounded, size: 24, color: primary),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class HomeScreen extends StatelessWidget{
@@ -506,9 +558,67 @@ class ClientsScreen extends StatefulWidget{
 class _ClientsScreenState extends State<ClientsScreen>{String q='';
   @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final x=q.trim().toLowerCase();final list=s.clients.where((c)=>x.isEmpty||c.name.toLowerCase().contains(x)||c.phone.contains(x)||c.dni.contains(x)||c.cuil.contains(x)||c.works.any((w)=>w.toLowerCase().contains(x))).toList();return Scaffold(appBar:const BrandAppBar(),floatingActionButton:FloatingActionButton.extended(onPressed:()=>showEditor(context),icon:const Icon(Icons.person_add),label:const Text('Nuevo cliente')),body:ListView(padding:const EdgeInsets.fromLTRB(20,20,20,100),children:[TextField(onChanged:(v)=>setState(()=>q=v),decoration:const InputDecoration(hintText:'Buscar cliente...',prefixIcon:Icon(Icons.search))),const SizedBox(height:14),if(list.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(22),child:Text('No hay clientes para mostrar.'))),...list.map((c)=>Card(child:ListTile(leading:CircleAvatar(child:Text(c.name.isEmpty?'?':c.name[0].toUpperCase())),title:Text(c.name,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text(c.works.isEmpty?'Sin trabajos guardados':'${c.works.length} trabajo${c.works.length==1?'':'s'}'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>ClientDetailScreen(clientId:c.id))))))]));});}
 
-  static Future<void> pickContact(BuildContext context,TextEditingController n,TextEditingController p)async{
-    final st=await FlutterContacts.permissions.request(PermissionType.read); if(st!=PermissionStatus.granted){if(context.mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No se dio permiso para leer la agenda.')));return;}
-    final c=await FlutterContacts.native.showPicker(properties:{ContactProperty.name,ContactProperty.phone}); if(c!=null){if((c.displayName??'').isNotEmpty)n.text=c.displayName!;if(c.phones.isNotEmpty)p.text=c.phones.first.number;}
+  static Future<void> pickContact(
+    BuildContext context,
+    TextEditingController n,
+    TextEditingController p,
+  ) async {
+    try {
+      final status = await FlutterContacts.permissions.request(PermissionType.readWrite);
+      final allowed =
+          status == PermissionStatus.granted || status == PermissionStatus.limited;
+
+      if (!allowed) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('PintaM² necesita permiso para leer la agenda.'),
+              action: SnackBarAction(
+                label: 'Ajustes',
+                onPressed: () => FlutterContacts.permissions.openSettings(),
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      Contact? selected = await FlutterContacts.native.showPicker(
+        properties: {ContactProperty.name, ContactProperty.phone},
+      );
+      if (selected == null) return;
+
+      if (selected.phones.isEmpty && selected.id != null) {
+        selected = await FlutterContacts.get(
+          selected.id!,
+          properties: {ContactProperty.name, ContactProperty.phone},
+        );
+      }
+      if (selected == null) return;
+
+      if ((selected.displayName ?? '').trim().isNotEmpty) {
+        n.text = selected.displayName!.trim();
+      }
+      if (selected.phones.isNotEmpty) {
+        p.text = selected.phones.first.number.trim();
+      } else if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('El contacto elegido no tiene número guardado.')),
+        );
+      }
+    } on PlatformException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo abrir la agenda: ${e.message ?? e.code}')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo seleccionar el contacto.')),
+        );
+      }
+    }
   }
   static void showEditor(BuildContext context,{ClientData? client}){final n=TextEditingController(text:client?.name??''),p=TextEditingController(text:client?.phone??''),dni=TextEditingController(text:client?.dni??''),cuil=TextEditingController(text:client?.cuil??''),work=TextEditingController(text:client==null?'':(client.works.isNotEmpty?client.works.first:client.address));showModalBottomSheet(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>Padding(padding:EdgeInsets.fromLTRB(20,10,20,20+MediaQuery.of(ctx).viewInsets.bottom),child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[Text(client==null?'Nuevo cliente':'Editar cliente',style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800)),const SizedBox(height:14),TextField(controller:n,decoration:const InputDecoration(labelText:'Nombre')),const SizedBox(height:10),TextField(controller:p,keyboardType:TextInputType.phone,decoration:InputDecoration(labelText:'Teléfono',suffixIcon:IconButton(onPressed:()=>pickContact(ctx,n,p),icon:const Icon(Icons.contacts_outlined),tooltip:'Elegir desde agenda'))),const SizedBox(height:10),TextField(controller:dni,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'DNI')),const SizedBox(height:10),TextField(controller:cuil,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'CUIL')),const SizedBox(height:10),TextField(controller:work,decoration:const InputDecoration(labelText:'Primer trabajo / lugar',hintText:'Casa, oficinas, local...')),const SizedBox(height:16),FilledButton(onPressed:()async{if(n.text.trim().isEmpty)return;final s=AppStore.instance;if(client==null){final w=work.text.trim();s.clients.add(ClientData(id:DateTime.now().microsecondsSinceEpoch.toString(),name:n.text.trim(),phone:p.text.trim(),dni:dni.text.trim(),cuil:cuil.text.trim(),address:w,works:w.isEmpty?[]:[w]));}else{client.name=n.text.trim();client.phone=p.text.trim();client.dni=dni.text.trim();client.cuil=cuil.text.trim();final w=work.text.trim();if(client.works.isEmpty&&w.isNotEmpty)client.works.add(w);else if(client.works.isNotEmpty&&w.isNotEmpty)client.works[0]=w;client.address=client.works.isEmpty?'':client.works.first;}await s.save();if(ctx.mounted)Navigator.pop(ctx);},child:const Text('Guardar'))]))));}
 }
@@ -548,14 +658,207 @@ class MeasurementResult {
   const MeasurementResult(this.total, this.detail, this.sectorPriceTotal);
 }
 
-class TraditionalCalculatorScreen extends StatefulWidget{const TraditionalCalculatorScreen({super.key});@override State<TraditionalCalculatorScreen> createState()=>_TraditionalCalculatorScreenState();}
-class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScreen>{String display='0';double? first;String? op;bool replace=true;
-  void digit(String d)=>setState((){if(replace||display=='0'){display=d;replace=false;}else display+=d;});
-  void dec()=>setState((){if(replace){display='0,';replace=false;}else if(!display.contains(','))display+=',';});
-  void oper(String o){first=double.tryParse(display.replaceAll(',','.'))??0;op=o;replace=true;}
-  void eq(){if(first==null||op==null)return;final b=double.tryParse(display.replaceAll(',','.'))??0;double r=b;if(op=='+')r=first!+b;if(op=='-')r=first!-b;if(op=='×')r=first!*b;if(op=='÷')r=b==0?0:first!/b;setState((){display=(r.truncateToDouble()==r?r.toStringAsFixed(0):r.toStringAsFixed(2)).replaceAll('.',',');first=null;op=null;replace=true;});}
-  Future<void> m2()async{final l=TextEditingController(),h=TextEditingController();final r=await showDialog<double>(context:context,builder:(d)=>AlertDialog(title:const Text('M² rápido'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:l,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Largo (m)')),const SizedBox(height:8),TextField(controller:h,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Alto (m)'))]),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,(double.tryParse(l.text.replaceAll(',','.'))??0)*(double.tryParse(h.text.replaceAll(',','.'))??0)),child:const Text('Calcular'))]));if(r!=null)setState((){display=r.toStringAsFixed(2).replaceAll('.',',');replace=true;});}
-  @override Widget build(BuildContext context){const rows=[['7','8','9','÷'],['4','5','6','×'],['1','2','3','-'],['0',',','=','+']];return Scaffold(appBar:AppBar(title:const Text('Calculadora')),body:Padding(padding:const EdgeInsets.all(16),child:Column(children:[Card(child:Padding(padding:const EdgeInsets.all(20),child:Align(alignment:Alignment.centerRight,child:SelectableText(display,style:const TextStyle(fontSize:38,fontWeight:FontWeight.w800))))),Row(children:[Expanded(child:OutlinedButton(onPressed:()=>setState((){display='0';first=null;op=null;replace=true;}),child:const Text('C'))),const SizedBox(width:8),Expanded(child:FilledButton.icon(onPressed:m2,icon:const Icon(Icons.square_foot),label:const Text('M²')))]),const SizedBox(height:8),...rows.map((row)=>Expanded(child:Row(children:row.map((b)=>Expanded(child:Padding(padding:const EdgeInsets.all(4),child:FilledButton.tonal(onPressed:(){if('0123456789'.contains(b))digit(b);else if(b==',')dec();else if(b=='=')eq();else oper(b);},child:Text(b,style:const TextStyle(fontSize:24)))))).toList())))])));}}
+class TraditionalCalculatorScreen extends StatefulWidget {
+  const TraditionalCalculatorScreen({super.key});
+  @override
+  State<TraditionalCalculatorScreen> createState() => _TraditionalCalculatorScreenState();
+}
+
+class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScreen> {
+  String display = '0';
+  double? first;
+  String? op;
+  bool replace = true;
+
+  void digit(String d) => setState(() {
+        if (replace || display == '0') {
+          display = d;
+          replace = false;
+        } else {
+          display += d;
+        }
+      });
+
+  void decimal() => setState(() {
+        if (replace) {
+          display = '0,';
+          replace = false;
+        } else if (!display.contains(',')) {
+          display += ',';
+        }
+      });
+
+  void operation(String value) {
+    first = double.tryParse(display.replaceAll(',', '.')) ?? 0;
+    op = value;
+    setState(() => replace = true);
+  }
+
+  void clear() => setState(() {
+        display = '0';
+        first = null;
+        op = null;
+        replace = true;
+      });
+
+  void equals() {
+    if (first == null || op == null) return;
+    final second = double.tryParse(display.replaceAll(',', '.')) ?? 0;
+    double result = second;
+    if (op == '+') result = first! + second;
+    if (op == '-') result = first! - second;
+    if (op == '×') result = first! * second;
+    if (op == '÷') result = second == 0 ? 0 : first! / second;
+    setState(() {
+      display = (result.truncateToDouble() == result
+              ? result.toStringAsFixed(0)
+              : result.toStringAsFixed(2))
+          .replaceAll('.', ',');
+      first = null;
+      op = null;
+      replace = true;
+    });
+  }
+
+  Future<void> m2() async {
+    final largo = TextEditingController();
+    final alto = TextEditingController();
+    final result = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('M² rápido'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Ingresá largo y alto. PintaM² hace la multiplicación.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: largo,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Largo', suffixText: 'm'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: alto,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Alto', suffixText: 'm'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: () {
+              final l = double.tryParse(largo.text.replaceAll(',', '.')) ?? 0;
+              final h = double.tryParse(alto.text.replaceAll(',', '.')) ?? 0;
+              Navigator.pop(ctx, l * h);
+            },
+            child: const Text('Calcular m²'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        display = result.toStringAsFixed(2).replaceAll('.', ',');
+        replace = true;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const keys = ['7','8','9','÷','4','5','6','×','1','2','3','-','0',',','=','+'];
+    return Scaffold(
+      appBar: AppBar(title: const Text('Calculadora')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: SelectableText(
+                      display,
+                      style: const TextStyle(fontSize: 38, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: clear,
+                      icon: const Icon(Icons.backspace_outlined),
+                      label: const Text('Borrar'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: m2,
+                      icon: const Icon(Icons.square_foot),
+                      label: const Text('M² rápido'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: keys.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 6,
+                  childAspectRatio: 1.35,
+                ),
+                itemBuilder: (context, index) {
+                  final key = keys[index];
+                  final isOperator = ['÷', '×', '-', '+', '='].contains(key);
+                  return FilledButton.tonal(
+                    style: FilledButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () {
+                      if ('0123456789'.contains(key)) {
+                        digit(key);
+                      } else if (key == ',') {
+                        decimal();
+                      } else if (key == '=') {
+                        equals();
+                      } else {
+                        operation(key);
+                      }
+                    },
+                    child: Text(
+                      key,
+                      style: TextStyle(
+                        fontSize: 23,
+                        fontWeight: isOperator ? FontWeight.w800 : FontWeight.w600,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class AdvancedCalculatorScreen extends StatefulWidget {
   final bool returnResult;
@@ -1616,19 +1919,10 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
           ),
           pw.SizedBox(height: 10),
           pw.Container(height:3,color:blue),
-          pw.Row(children: [
-            pw.Expanded(child: info('CLIENTE', b.clientName)),
-            pw.SizedBox(width: 12),
-            pw.Expanded(child: info('OBRA', b.place)),
-          ]),
+          info('CLIENTE', b.clientName),
           pw.SizedBox(height: 14),
           section('TIPO DE TRABAJO', blue),
           pw.Text(b.workType.isEmpty ? '-' : b.workType),
-          if (b.area > 0) ...[
-            pw.SizedBox(height: 12),
-            section('SUPERFICIE', blue),
-            pw.Text('${b.area.toStringAsFixed(2)} m²'),
-          ],
           if (b.jobs.isNotEmpty) ...[
             pw.SizedBox(height: 16),
             section('TRABAJOS A REALIZAR', blue),
@@ -1647,16 +1941,6 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
             ),
             if (b.extraMaterials.isNotEmpty) pw.Text(b.extraMaterials),
           ],
-          if (b.notes.isNotEmpty) ...[
-            pw.SizedBox(height: 16),
-            section('ACLARACIONES', blue),
-            ...b.notes.split('\n').where((e) => e.trim().isNotEmpty).map(
-                  (e) => pw.Padding(
-                    padding: const pw.EdgeInsets.only(bottom: 4),
-                    child: pw.Text('- ${e.trim()}'),
-                  ),
-                ),
-          ],
           pw.SizedBox(height: 22),
           pw.Container(
             padding: const pw.EdgeInsets.all(14),
@@ -1672,17 +1956,52 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
                 style: pw.TextStyle(
                   fontSize: 20,
                   fontWeight: pw.FontWeight.bold,
-                  color: blue,
+                  color: PdfColors.black,
                 ),
               ),
             ]),
           ),
-          pw.SizedBox(height: 16),
+          if (b.notes.isNotEmpty) ...[
+            pw.SizedBox(height: 22),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColor.fromHex('#B9C7D5')),
+                borderRadius: pw.BorderRadius.circular(6),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'ACLARACIONES',
+                    style: pw.TextStyle(
+                      fontSize: 9,
+                      fontWeight: pw.FontWeight.bold,
+                      color: blue,
+                    ),
+                  ),
+                  pw.SizedBox(height: 6),
+                  ...b.notes.split('\n').where((e) => e.trim().isNotEmpty).map(
+                        (e) => pw.Padding(
+                          padding: const pw.EdgeInsets.only(bottom: 4),
+                          child: pw.Text('• ${e.trim()}', style: const pw.TextStyle(fontSize: 9)),
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          ],
+          pw.SizedBox(height: 24),
           pw.Align(
             alignment: pw.Alignment.center,
             child: pw.Text(
-              'Generado con PintaM2',
-              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey),
+              'PintaM²',
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColor.fromHex('#B6BDC5'),
+              ),
             ),
           ),
         ],
@@ -1781,7 +2100,7 @@ class MoreScreen extends StatelessWidget{
     Card(child:ListTile(leading:const Icon(Icons.manage_accounts_outlined),title:const Text('Editar datos'),subtitle:const Text('Usuario, empresa, logo y precios'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const EditProfileScreen())))),
     Card(child:ListTile(leading:const Icon(Icons.backup_outlined),title:const Text('Exportar / guardar datos'),subtitle:const Text('Copia de seguridad para cambiar de celular'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const BackupScreen())))),
     Card(child:ListTile(leading:const Icon(Icons.palette_outlined),title:const Text('Apariencia'),onTap:()=>showModalBottomSheet(context:context,builder:(ctx)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[ListTile(title:const Text('Seguir el sistema'),onTap:(){onThemeChanged(ThemeMode.system);Navigator.pop(ctx);}),ListTile(title:const Text('Claro'),onTap:(){onThemeChanged(ThemeMode.light);Navigator.pop(ctx);}),ListTile(title:const Text('Oscuro'),onTap:(){onThemeChanged(ThemeMode.dark);Navigator.pop(ctx);})]))))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('Acerca de PintaM²'),subtitle:Text('Versión de prueba 0.10'))),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('Acerca de PintaM²'),subtitle:Text('Versión de prueba 0.11'))),
   ]));
 }
 
