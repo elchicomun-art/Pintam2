@@ -1,26 +1,19 @@
-# PintaM² v0.9 - prueba
+# PintaM² v0.10 - versión de prueba
 
-Se mantiene la base de la v0.8 y se agregan estas mejoras:
+Se mantiene la base de la v0.9.2 y se agregan las mejoras solicitadas:
 
-- Frases y aclaraciones editadas quedan guardadas para próximos presupuestos.
-- Vista previa del presupuesto con zoom y botón Volver al inicio.
-- Presupuesto con diseño más profesional.
-- Clientes con DNI, CUIL y teléfono importable desde la agenda.
-- Cliente -> trabajo -> colores/códigos específicos de ese trabajo.
-- Colores/códigos con el mismo flujo cliente -> trabajo -> colores.
-- Calculadora por sectores mantiene m² por paredes y suma de precios.
-- Botón Calculadora abre una calculadora tradicional con botón M² rápido.
-- Nuevo módulo Turnos, calendario y recordatorios editables.
-- Nueva Papelera: restaura, elimina definitivamente, vacía y elimina automáticamente a los 7 días.
-- Más queda simplificado: no repite funciones que ya aparecen en Inicio.
-- Guardado automático del presupuesto en creación para recuperar un borrador.
-- Inicio muestra pendientes como 'X pendientes de Y'.
+- Frases/aclaraciones editadas se guardan para próximos presupuestos.
+- Vista previa con zoom y botón Volver al inicio.
+- Cliente > Trabajo/Lugar > Colores y códigos usados en ese trabajo.
+- Mismo flujo en Colores / códigos.
+- Calculadora tradicional rápida con botón M².
+- Turnos, calendario y recordatorios internos editables.
 - Encabezado PintaM² rediseñado y centrado.
-
-Nota: los recordatorios quedan guardados y señalados dentro de PintaM² en esta versión.
-
-
-## v0.9.1
-- Exportación real a archivo JSON mediante el menú Compartir de Android.
-- Importación de copias JSON con confirmación.
-- Ícono de inicio configurado desde `assets/app_icon.png` (logo PintaM²).
+- Presupuesto PDF con presentación más profesional.
+- Inicio muestra pendientes sobre cantidad total de presupuestos.
+- Papelera por 7 días con restaurar, eliminar definitivamente y vaciar.
+- Más simplificado, sin accesos duplicados del Inicio.
+- Guardado automático del borrador de presupuesto.
+- Clientes con DNI, CUIL y teléfono elegible desde la agenda.
+- Se mantiene copia de seguridad por archivo JSON.
+- Se mantiene el logo PintaM² como icono de la app.
