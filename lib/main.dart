@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -12,6 +14,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+VoidCallback? pintaGoHome;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,6 +72,8 @@ class ClientData {
   String name;
   String address;
   String phone;
+  String dni;
+  String cuil;
   List<String> works;
 
   ClientData({
@@ -75,30 +81,25 @@ class ClientData {
     required this.name,
     this.address = '',
     this.phone = '',
+    this.dni = '',
+    this.cuil = '',
     List<String>? works,
   }) : works = works ?? [];
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'address': address,
-        'phone': phone,
-        'works': works,
+        'id': id, 'name': name, 'address': address, 'phone': phone,
+        'dni': dni, 'cuil': cuil, 'works': works,
       };
 
   factory ClientData.fromJson(Map<String, dynamic> json) {
-    final legacyAddress = (json['address'] ?? '').toString();
-    final rawWorks = json['works'];
-    final works = rawWorks is List
-        ? rawWorks.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList()
-        : <String>[];
-    if (works.isEmpty && legacyAddress.trim().isNotEmpty) works.add(legacyAddress.trim());
+    final address = (json['address'] ?? '').toString();
+    final raw = json['works'];
+    final works = raw is List ? raw.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList() : <String>[];
+    if (works.isEmpty && address.trim().isNotEmpty) works.add(address.trim());
     return ClientData(
-      id: (json['id'] ?? '').toString(),
-      name: (json['name'] ?? '').toString(),
-      address: legacyAddress,
-      phone: (json['phone'] ?? '').toString(),
-      works: works,
+      id: (json['id'] ?? '').toString(), name: (json['name'] ?? '').toString(),
+      address: address, phone: (json['phone'] ?? '').toString(),
+      dni: (json['dni'] ?? '').toString(), cuil: (json['cuil'] ?? '').toString(), works: works,
     );
   }
 }
@@ -106,6 +107,7 @@ class ClientData {
 class ColorData {
   String id;
   String clientId;
+  String workName;
   String sector;
   String name;
   String code;
@@ -113,33 +115,20 @@ class ColorData {
   String notes;
 
   ColorData({
-    required this.id,
-    required this.clientId,
-    this.sector = '',
-    required this.name,
-    this.code = '',
-    this.preparation = '',
-    this.notes = '',
+    required this.id, required this.clientId, this.workName = '', this.sector = '',
+    required this.name, this.code = '', this.preparation = '', this.notes = '',
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'clientId': clientId,
-        'sector': sector,
-        'name': name,
-        'code': code,
-        'preparation': preparation,
-        'notes': notes,
+        'id': id, 'clientId': clientId, 'workName': workName, 'sector': sector,
+        'name': name, 'code': code, 'preparation': preparation, 'notes': notes,
       };
 
   factory ColorData.fromJson(Map<String, dynamic> json) => ColorData(
-        id: (json['id'] ?? '').toString(),
-        clientId: (json['clientId'] ?? '').toString(),
-        sector: (json['sector'] ?? '').toString(),
-        name: (json['name'] ?? '').toString(),
-        code: (json['code'] ?? '').toString(),
-        preparation: (json['preparation'] ?? '').toString(),
-        notes: (json['notes'] ?? '').toString(),
+        id: (json['id'] ?? '').toString(), clientId: (json['clientId'] ?? '').toString(),
+        workName: (json['workName'] ?? '').toString(), sector: (json['sector'] ?? '').toString(),
+        name: (json['name'] ?? '').toString(), code: (json['code'] ?? '').toString(),
+        preparation: (json['preparation'] ?? '').toString(), notes: (json['notes'] ?? '').toString(),
       );
 }
 
@@ -241,116 +230,92 @@ class BudgetData {
   }
 }
 
+class AppointmentData {
+  String id;
+  String title;
+  String client;
+  String notes;
+  String dateTime;
+  bool reminder;
+
+  AppointmentData({required this.id, required this.title, this.client = '', this.notes = '', required this.dateTime, this.reminder = false});
+  Map<String,dynamic> toJson()=>{'id':id,'title':title,'client':client,'notes':notes,'dateTime':dateTime,'reminder':reminder};
+  factory AppointmentData.fromJson(Map<String,dynamic> j)=>AppointmentData(
+    id:(j['id']??'').toString(), title:(j['title']??'').toString(), client:(j['client']??'').toString(), notes:(j['notes']??'').toString(),
+    dateTime:(j['dateTime']??DateTime.now().toIso8601String()).toString(), reminder:j['reminder']??false);
+}
+
+class TrashData {
+  String id;
+  String type;
+  String label;
+  String deletedAt;
+  Map<String,dynamic> payload;
+  TrashData({required this.id,required this.type,required this.label,required this.deletedAt,required this.payload});
+  Map<String,dynamic> toJson()=>{'id':id,'type':type,'label':label,'deletedAt':deletedAt,'payload':payload};
+  factory TrashData.fromJson(Map<String,dynamic> j)=>TrashData(
+    id:(j['id']??'').toString(),type:(j['type']??'').toString(),label:(j['label']??'').toString(),deletedAt:(j['deletedAt']??DateTime.now().toIso8601String()).toString(),payload:Map<String,dynamic>.from(j['payload']??const{}));
+}
+
 class AppStore extends ChangeNotifier {
   AppStore._();
   static final AppStore instance = AppStore._();
 
-  static const _setupKey = 'pintam2_setup_v07';
-  static const _profileKey = 'pintam2_profile_v07';
-  static const _clientsKey = 'pintam2_clients_v07';
-  static const _colorsKey = 'pintam2_colors_v07';
-  static const _budgetsKey = 'pintam2_budgets_v07';
+  static const _setupKey='pintam2_setup_v07', _profileKey='pintam2_profile_v07', _clientsKey='pintam2_clients_v07', _colorsKey='pintam2_colors_v07', _budgetsKey='pintam2_budgets_v07';
+  static const _appointmentsKey='pintam2_appointments_v010', _trashKey='pintam2_trash_v010', _phrasesKey='pintam2_phrases_v010', _draftKey='pintam2_budget_draft_v010';
 
-  bool setupDone = false;
-  UserProfile profile = UserProfile();
-  final List<ClientData> clients = [];
-  final List<ColorData> colors = [];
-  final List<BudgetData> budgets = [];
+  bool setupDone=false;
+  UserProfile profile=UserProfile();
+  final List<ClientData> clients=[];
+  final List<ColorData> colors=[];
+  final List<BudgetData> budgets=[];
+  final List<AppointmentData> appointments=[];
+  final List<TrashData> trash=[];
+  List<String> budgetPhrases=[
+    'Este presupuesto es válido por 15 días a partir de la fecha.',
+    'Todo trabajo extra fuera del presupuesto se cobrará aparte.',
+    'Los materiales serán provistos por el cliente, salvo aclaración.',
+  ];
+  Map<String,dynamic>? budgetDraft;
 
   Future<void> load() async {
-    final sp = await SharedPreferences.getInstance();
-    setupDone = sp.getBool(_setupKey) ?? false;
-    try {
-      final raw = sp.getString(_profileKey);
-      if (raw != null) profile = UserProfile.fromJson(Map<String, dynamic>.from(jsonDecode(raw)));
-    } catch (_) {}
-    try {
-      final raw = sp.getString(_clientsKey);
-      if (raw != null) {
-        clients
-          ..clear()
-          ..addAll((jsonDecode(raw) as List).map((e) => ClientData.fromJson(Map<String, dynamic>.from(e))));
-      }
-    } catch (_) {}
-    try {
-      final raw = sp.getString(_colorsKey);
-      if (raw != null) {
-        colors
-          ..clear()
-          ..addAll((jsonDecode(raw) as List).map((e) => ColorData.fromJson(Map<String, dynamic>.from(e))));
-      }
-    } catch (_) {}
-    try {
-      final raw = sp.getString(_budgetsKey);
-      if (raw != null) {
-        budgets
-          ..clear()
-          ..addAll((jsonDecode(raw) as List).map((e) => BudgetData.fromJson(Map<String, dynamic>.from(e))));
-      }
-    } catch (_) {}
+    final sp=await SharedPreferences.getInstance(); setupDone=sp.getBool(_setupKey)??false;
+    try{final r=sp.getString(_profileKey);if(r!=null)profile=UserProfile.fromJson(Map<String,dynamic>.from(jsonDecode(r)));}catch(_){}
+    try{final r=sp.getString(_clientsKey);if(r!=null){clients..clear()..addAll((jsonDecode(r)as List).map((e)=>ClientData.fromJson(Map<String,dynamic>.from(e))));}}catch(_){}
+    try{final r=sp.getString(_colorsKey);if(r!=null){colors..clear()..addAll((jsonDecode(r)as List).map((e)=>ColorData.fromJson(Map<String,dynamic>.from(e))));}}catch(_){}
+    try{final r=sp.getString(_budgetsKey);if(r!=null){budgets..clear()..addAll((jsonDecode(r)as List).map((e)=>BudgetData.fromJson(Map<String,dynamic>.from(e))));}}catch(_){}
+    try{final r=sp.getString(_appointmentsKey);if(r!=null){appointments..clear()..addAll((jsonDecode(r)as List).map((e)=>AppointmentData.fromJson(Map<String,dynamic>.from(e))));}}catch(_){}
+    try{final r=sp.getString(_trashKey);if(r!=null){trash..clear()..addAll((jsonDecode(r)as List).map((e)=>TrashData.fromJson(Map<String,dynamic>.from(e))));}}catch(_){}
+    try{final r=sp.getString(_phrasesKey);if(r!=null){final x=(jsonDecode(r)as List).map((e)=>e.toString()).toList();if(x.isNotEmpty)budgetPhrases=x;}}catch(_){}
+    try{final r=sp.getString(_draftKey);if(r!=null)budgetDraft=Map<String,dynamic>.from(jsonDecode(r));}catch(_){}
+    await cleanExpiredTrash();
   }
 
   Future<void> save() async {
-    final sp = await SharedPreferences.getInstance();
-    await sp.setBool(_setupKey, setupDone);
-    await sp.setString(_profileKey, jsonEncode(profile.toJson()));
-    await sp.setString(_clientsKey, jsonEncode(clients.map((e) => e.toJson()).toList()));
-    await sp.setString(_colorsKey, jsonEncode(colors.map((e) => e.toJson()).toList()));
-    await sp.setString(_budgetsKey, jsonEncode(budgets.map((e) => e.toJson()).toList()));
-    notifyListeners();
+    final sp=await SharedPreferences.getInstance();
+    await sp.setBool(_setupKey,setupDone); await sp.setString(_profileKey,jsonEncode(profile.toJson()));
+    await sp.setString(_clientsKey,jsonEncode(clients.map((e)=>e.toJson()).toList())); await sp.setString(_colorsKey,jsonEncode(colors.map((e)=>e.toJson()).toList()));
+    await sp.setString(_budgetsKey,jsonEncode(budgets.map((e)=>e.toJson()).toList())); await sp.setString(_appointmentsKey,jsonEncode(appointments.map((e)=>e.toJson()).toList()));
+    await sp.setString(_trashKey,jsonEncode(trash.map((e)=>e.toJson()).toList())); await sp.setString(_phrasesKey,jsonEncode(budgetPhrases)); notifyListeners();
   }
 
-  String nextBudgetNumber() {
-    final year = DateTime.now().year;
-    final n = budgets.length + 1;
-    return '$year-${n.toString().padLeft(4, '0')}';
-  }
+  Future<void> saveBudgetDraft(Map<String,dynamic> d)async{budgetDraft=d;final sp=await SharedPreferences.getInstance();await sp.setString(_draftKey,jsonEncode(d));}
+  Future<void> clearBudgetDraft()async{budgetDraft=null;final sp=await SharedPreferences.getInstance();await sp.remove(_draftKey);}
+  String nextBudgetNumber(){final y=DateTime.now().year;return '$y-${(budgets.length+1).toString().padLeft(4,'0')}';}
+  Future<void> upsertBudget(BudgetData b)async{final i=budgets.indexWhere((x)=>x.id==b.id);if(i>=0)budgets[i]=b;else budgets.insert(0,b);await save();}
 
-  Future<void> upsertBudget(BudgetData budget) async {
-    final i = budgets.indexWhere((b) => b.id == budget.id);
-    if (i >= 0) {
-      budgets[i] = budget;
-    } else {
-      budgets.insert(0, budget);
-    }
-    await save();
-  }
+  Future<void> moveBudgetToTrash(BudgetData b)async{budgets.removeWhere((x)=>x.id==b.id);trash.add(TrashData(id:DateTime.now().microsecondsSinceEpoch.toString(),type:'budget',label:'Presupuesto ${b.number} · ${b.clientName}',deletedAt:DateTime.now().toIso8601String(),payload:b.toJson()));await save();}
+  Future<void> moveClientToTrash(ClientData c)async{clients.removeWhere((x)=>x.id==c.id);trash.add(TrashData(id:DateTime.now().microsecondsSinceEpoch.toString(),type:'client',label:'Cliente ${c.name}',deletedAt:DateTime.now().toIso8601String(),payload:c.toJson()));await save();}
+  Future<void> moveColorToTrash(ColorData c)async{colors.removeWhere((x)=>x.id==c.id);trash.add(TrashData(id:DateTime.now().microsecondsSinceEpoch.toString(),type:'color',label:'Color ${c.name.isEmpty?c.code:c.name}',deletedAt:DateTime.now().toIso8601String(),payload:c.toJson()));await save();}
+  Future<void> moveAppointmentToTrash(AppointmentData a)async{appointments.removeWhere((x)=>x.id==a.id);trash.add(TrashData(id:DateTime.now().microsecondsSinceEpoch.toString(),type:'appointment',label:'Turno ${a.title}',deletedAt:DateTime.now().toIso8601String(),payload:a.toJson()));await save();}
 
-  Future<void> deleteBudget(String id) async {
-    budgets.removeWhere((b) => b.id == id);
-    await save();
-  }
+  Future<void> restoreTrash(TrashData t)async{if(t.type=='budget')budgets.insert(0,BudgetData.fromJson(t.payload));if(t.type=='client')clients.add(ClientData.fromJson(t.payload));if(t.type=='color')colors.add(ColorData.fromJson(t.payload));if(t.type=='appointment')appointments.add(AppointmentData.fromJson(t.payload));trash.removeWhere((x)=>x.id==t.id);await save();}
+  Future<void> permanentlyDeleteTrash(TrashData t)async{trash.removeWhere((x)=>x.id==t.id);if(t.type=='client'){final id=(t.payload['id']??'').toString();colors.removeWhere((c)=>c.clientId==id);}await save();}
+  Future<void> emptyTrash()async{for(final t in List<TrashData>.from(trash)){if(t.type=='client'){final id=(t.payload['id']??'').toString();colors.removeWhere((c)=>c.clientId==id);}}trash.clear();await save();}
+  Future<void> cleanExpiredTrash()async{final limit=DateTime.now().subtract(const Duration(days:7));final expired=trash.where((t){final d=DateTime.tryParse(t.deletedAt);return d!=null&&d.isBefore(limit);}).toList();if(expired.isEmpty)return;for(final t in expired){if(t.type=='client'){final id=(t.payload['id']??'').toString();colors.removeWhere((c)=>c.clientId==id);}trash.removeWhere((x)=>x.id==t.id);}await save();}
 
-  String backupJson() {
-    return jsonEncode({
-      'version': 8,
-      'profile': profile.toJson(),
-      'clients': clients.map((e) => e.toJson()).toList(),
-      'colors': colors.map((e) => e.toJson()).toList(),
-      'budgets': budgets.map((e) => e.toJson()).toList(),
-    });
-  }
-
-  Future<void> restoreBackup(String raw) async {
-    final data = Map<String, dynamic>.from(jsonDecode(raw));
-    if (data['profile'] is Map) {
-      profile = UserProfile.fromJson(Map<String, dynamic>.from(data['profile']));
-    }
-    clients
-      ..clear()
-      ..addAll(((data['clients'] as List?) ?? const [])
-          .map((e) => ClientData.fromJson(Map<String, dynamic>.from(e))));
-    colors
-      ..clear()
-      ..addAll(((data['colors'] as List?) ?? const [])
-          .map((e) => ColorData.fromJson(Map<String, dynamic>.from(e))));
-    budgets
-      ..clear()
-      ..addAll(((data['budgets'] as List?) ?? const [])
-          .map((e) => BudgetData.fromJson(Map<String, dynamic>.from(e))));
-    setupDone = true;
-    await save();
-  }
+  String backupJson()=>jsonEncode({'version':10,'profile':profile.toJson(),'clients':clients.map((e)=>e.toJson()).toList(),'colors':colors.map((e)=>e.toJson()).toList(),'budgets':budgets.map((e)=>e.toJson()).toList(),'appointments':appointments.map((e)=>e.toJson()).toList(),'phrases':budgetPhrases,'trash':trash.map((e)=>e.toJson()).toList()});
+  Future<void> restoreBackup(String raw)async{final d=Map<String,dynamic>.from(jsonDecode(raw));if(d['profile']is Map)profile=UserProfile.fromJson(Map<String,dynamic>.from(d['profile']));clients..clear()..addAll(((d['clients']as List?)??const[]).map((e)=>ClientData.fromJson(Map<String,dynamic>.from(e))));colors..clear()..addAll(((d['colors']as List?)??const[]).map((e)=>ColorData.fromJson(Map<String,dynamic>.from(e))));budgets..clear()..addAll(((d['budgets']as List?)??const[]).map((e)=>BudgetData.fromJson(Map<String,dynamic>.from(e))));appointments..clear()..addAll(((d['appointments']as List?)??const[]).map((e)=>AppointmentData.fromJson(Map<String,dynamic>.from(e))));if(d['phrases']is List)budgetPhrases=(d['phrases']as List).map((e)=>e.toString()).toList();trash..clear()..addAll(((d['trash']as List?)??const[]).map((e)=>TrashData.fromJson(Map<String,dynamic>.from(e))));setupDone=true;await save();}
 }
 
 class PintaM2App extends StatefulWidget {
@@ -367,6 +332,12 @@ class _PintaM2AppState extends State<PintaM2App> {
     return MaterialApp(
       title: 'PintaM²',
       debugShowCheckedModeBanner: false,
+      locale: const Locale('es', 'AR'),
+      supportedLocales: const [
+        Locale('es', 'AR'),
+        Locale('es'),
+      ],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       themeMode: mode,
       theme: ThemeData(
         useMaterial3: true,
@@ -504,613 +475,167 @@ class _SetupScreenState extends State<SetupScreen> {
 class MainShell extends StatefulWidget {
   final ValueChanged<ThemeMode> onThemeChanged;
   const MainShell({super.key, required this.onThemeChanged});
-  @override
-  State<MainShell> createState() => _MainShellState();
+  @override State<MainShell> createState()=>_MainShellState();
 }
-
-class _MainShellState extends State<MainShell> {
-  int index = 0;
-  DateTime? lastBack;
-  @override
-  Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        if (index != 0) {
-          setState(() => index = 0);
-          return;
-        }
-        final now = DateTime.now();
-        if (lastBack != null && now.difference(lastBack!) < const Duration(seconds: 2)) {
-          SystemNavigator.pop();
-        } else {
-          lastBack = now;
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Presioná atrás otra vez para salir de PintaM²')));
-        }
-      },
-      child: Scaffold(
-        body: IndexedStack(index: index, children: [
-          HomeScreen(onTab: (i) => setState(() => index = i)),
-          const ClientsScreen(),
-          const BudgetsScreen(),
-          MoreScreen(onThemeChanged: widget.onThemeChanged),
-        ]),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: index,
-          onDestinationSelected: (i) => setState(() => index = i),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Inicio'),
-            NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Clientes'),
-            NavigationDestination(icon: Icon(Icons.description_outlined), selectedIcon: Icon(Icons.description), label: 'Presupuestos'),
-            NavigationDestination(icon: Icon(Icons.more_horiz), label: 'Más'),
-          ],
-        ),
-      ),
-    );
-  }
+class _MainShellState extends State<MainShell>{
+  int index=0; DateTime? lastBack;
+  @override void initState(){super.initState();pintaGoHome=(){if(mounted)setState(()=>index=0);};}
+  @override void dispose(){pintaGoHome=null;super.dispose();}
+  @override Widget build(BuildContext context)=>PopScope(canPop:false,onPopInvokedWithResult:(didPop,result){if(didPop)return;if(index!=0){setState(()=>index=0);return;}final n=DateTime.now();if(lastBack!=null&&n.difference(lastBack!)<const Duration(seconds:2)){SystemNavigator.pop();}else{lastBack=n;ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Presioná atrás otra vez para salir de PintaM²')));}},child:Scaffold(
+    body:IndexedStack(index:index,children:[HomeScreen(onTab:(i)=>setState(()=>index=i)),const ClientsScreen(),const BudgetsScreen(),MoreScreen(onThemeChanged:widget.onThemeChanged)]),
+    bottomNavigationBar:NavigationBar(selectedIndex:index,onDestinationSelected:(i)=>setState(()=>index=i),destinations:const[
+      NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home),label:'Inicio'),NavigationDestination(icon:Icon(Icons.people_outline),selectedIcon:Icon(Icons.people),label:'Clientes'),NavigationDestination(icon:Icon(Icons.description_outlined),selectedIcon:Icon(Icons.description),label:'Presupuestos'),NavigationDestination(icon:Icon(Icons.more_horiz),label:'Más')]),));
 }
 
 class BrandAppBar extends StatelessWidget implements PreferredSizeWidget {
   const BrandAppBar({super.key});
-  @override Size get preferredSize => const Size.fromHeight(kToolbarHeight);
-  @override
-  Widget build(BuildContext context) => AppBar(
-    title: Row(children: [
-      ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.asset('assets/app_icon.png', width: 34, height: 34)),
-      const SizedBox(width: 9),
-      Text('PintaM²', style: TextStyle(fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.primary)),
-    ]),
-  );
-}
 
-class HomeScreen extends StatelessWidget {
-  final ValueChanged<int> onTab;
-  const HomeScreen({super.key, required this.onTab});
+  @override
+  Size get preferredSize => const Size.fromHeight(76);
+
   @override
   Widget build(BuildContext context) {
-    final s = AppStore.instance;
-    return AnimatedBuilder(animation: s, builder: (_, __) {
-      final pending = s.budgets.where((b) => b.status == 'Pendiente').length;
-      return Scaffold(
-        appBar: const BrandAppBar(),
-        body: ListView(padding: const EdgeInsets.all(20), children: [
-          Text(s.profile.userName.isEmpty ? '¡Buen día! 👋' : '¡Buen día, ${s.profile.userName}! 👋', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 18),
-          FilledButton.icon(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetFlow())),
-            icon: const Icon(Icons.add), label: const Text('Nuevo presupuesto'),
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(58)),
+    final primary = Theme.of(context).colorScheme.primary;
+    return AppBar(
+      toolbarHeight: 76,
+      centerTitle: true,
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Transform.rotate(
+            angle: -0.15,
+            child: Icon(Icons.format_paint_rounded, size: 31, color: primary),
           ),
-          const SizedBox(height: 14),
-          _HomeCard(Icons.people_outline, 'Clientes', '${s.clients.length} registrados', () => onTab(1)),
-          _HomeCard(Icons.description_outlined, 'Presupuestos', '$pending pendientes', () => onTab(2)),
-          _HomeCard(Icons.palette_outlined, 'Colores / códigos', '${s.colors.length} guardados', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ColorsScreen()))),
-          _HomeCard(Icons.calculate_outlined, 'Calculadora', 'Medir por sectores y paredes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedCalculatorScreen()))),
-          _HomeCard(Icons.history_outlined, 'Historial', 'Estados y ganancias por mes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen()))),
-        ]),
-      );
-    });
-  }
-}
-
-class _HomeCard extends StatelessWidget {
-  final IconData icon; final String title, subtitle; final VoidCallback tap;
-  const _HomeCard(this.icon, this.title, this.subtitle, this.tap);
-  @override
-  Widget build(BuildContext context) => Card(child: ListTile(
-    onTap: tap, leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-    title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)), subtitle: Text(subtitle), trailing: const Icon(Icons.chevron_right),
-  ));
-}
-
-class ClientsScreen extends StatefulWidget {
-  const ClientsScreen({super.key});
-  @override
-  State<ClientsScreen> createState() => _ClientsScreenState();
-
-  static void editClient(BuildContext context, {ClientData? client}) {
-    _ClientsScreenState.showClientEditor(context, client: client);
-  }
-}
-
-class _ClientsScreenState extends State<ClientsScreen> {
-  String query = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppStore.instance;
-    return AnimatedBuilder(animation: s, builder: (_, __) {
-      final q = query.trim().toLowerCase();
-      final visible = s.clients.where((c) {
-        if (q.isEmpty) return true;
-        return c.name.toLowerCase().contains(q) ||
-            c.phone.toLowerCase().contains(q) ||
-            c.works.any((w) => w.toLowerCase().contains(q));
-      }).toList();
-
-      return Scaffold(
-        appBar: const BrandAppBar(),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => showClientEditor(context),
-          icon: const Icon(Icons.person_add),
-          label: const Text('Nuevo cliente'),
-        ),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-          children: [
-            TextField(
-              onChanged: (v) => setState(() => query = v),
-              decoration: const InputDecoration(
-                hintText: 'Buscar cliente...',
-                prefixIcon: Icon(Icons.search),
-              ),
-            ),
-            const SizedBox(height: 14),
-            if (visible.isEmpty)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(22),
-                  child: Center(child: Text('No hay clientes para mostrar.')),
-                ),
-              ),
-            ...visible.map((c) => Card(
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      child: Text(c.name.isEmpty ? '?' : c.name[0].toUpperCase()),
-                    ),
-                    title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: Text(
-                      c.works.isEmpty
-                          ? (c.phone.isEmpty ? 'Sin trabajos guardados' : c.phone)
-                          : '${c.works.length} trabajo${c.works.length == 1 ? '' : 's'} · ${c.works.take(2).join(' / ')}',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => ClientDetailScreen(clientId: c.id)),
-                    ),
-                  ),
-                )),
-          ],
-        ),
-      );
-    });
-  }
-
-  static void showClientEditor(BuildContext context, {ClientData? client}) {
-    final n = TextEditingController(text: client?.name ?? '');
-    final p = TextEditingController(text: client?.phone ?? '');
-    final firstWork = TextEditingController(
-      text: client == null ? '' : (client.works.isNotEmpty ? client.works.first : client.address),
-    );
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          20, 10, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom,
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(width: 2),
           Text(
-            client == null ? 'Nuevo cliente' : 'Editar cliente',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 14),
-          TextField(controller: n, decoration: const InputDecoration(labelText: 'Nombre')),
-          const SizedBox(height: 10),
-          TextField(controller: p, decoration: const InputDecoration(labelText: 'Teléfono')),
-          const SizedBox(height: 10),
-          TextField(
-            controller: firstWork,
-            decoration: const InputDecoration(
-              labelText: 'Primer trabajo / lugar',
-              hintText: 'Ej.: Casa, oficinas, local...',
+            'P',
+            style: TextStyle(
+              fontSize: 32,
+              height: 1,
+              fontWeight: FontWeight.w900,
+              color: primary,
             ),
           ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: () async {
-              if (n.text.trim().isEmpty) return;
-              final s = AppStore.instance;
-              if (client == null) {
-                final work = firstWork.text.trim();
-                s.clients.add(ClientData(
-                  id: DateTime.now().microsecondsSinceEpoch.toString(),
-                  name: n.text.trim(),
-                  phone: p.text.trim(),
-                  address: work,
-                  works: work.isEmpty ? [] : [work],
-                ));
-              } else {
-                client.name = n.text.trim();
-                client.phone = p.text.trim();
-                final work = firstWork.text.trim();
-                if (client.works.isEmpty && work.isNotEmpty) {
-                  client.works.add(work);
-                } else if (client.works.isNotEmpty && work.isNotEmpty) {
-                  client.works[0] = work;
-                }
-                client.address = client.works.isEmpty ? '' : client.works.first;
-              }
-              await s.save();
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Guardar'),
+          Text(
+            'intaM²',
+            style: TextStyle(
+              fontSize: 30,
+              height: 1,
+              fontWeight: FontWeight.w900,
+              letterSpacing: .2,
+              color: primary,
+            ),
           ),
-        ]),
-      ),
-    );
-  }
-}
-
-class ClientDetailScreen extends StatelessWidget {
-  final String clientId;
-  const ClientDetailScreen({super.key, required this.clientId});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppStore.instance;
-    return AnimatedBuilder(animation: s, builder: (_, __) {
-      final c = s.clients.where((x) => x.id == clientId).cast<ClientData?>().firstOrNull;
-      if (c == null) {
-        return Scaffold(appBar: AppBar(), body: const Center(child: Text('Cliente eliminado')));
-      }
-      final colors = s.colors.where((x) => x.clientId == c.id).toList();
-
-      return Scaffold(
-        appBar: AppBar(
-          title: Text(c.name),
-          actions: [
-            IconButton(
-              onPressed: () => ClientsScreen.editClient(context, client: c),
-              icon: const Icon(Icons.edit_outlined),
-            ),
-            IconButton(
-              onPressed: () => _deleteClient(context, c),
-              icon: const Icon(Icons.delete_outline),
-            ),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => _addWork(context, c),
-          icon: const Icon(Icons.add_home_work_outlined),
-          label: const Text('Agregar trabajo'),
-        ),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-          children: [
-            if (c.phone.isNotEmpty)
-              Card(
-                child: ListTile(
-                  leading: const Icon(Icons.phone_outlined),
-                  title: Text(c.phone),
-                ),
-              ),
-            const SizedBox(height: 8),
-            const Text(
-              'Trabajos / lugares',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            if (c.works.isEmpty)
-              const Text('Todavía no hay trabajos o lugares guardados.'),
-            ...c.works.asMap().entries.map((e) => Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.home_work_outlined),
-                    title: Text(e.value),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (v) async {
-                        if (v == 'delete') {
-                          c.works.removeAt(e.key);
-                          c.address = c.works.isEmpty ? '' : c.works.first;
-                          await s.save();
-                        }
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'delete', child: Text('Eliminar')),
-                      ],
-                    ),
-                  ),
-                )),
-            const SizedBox(height: 16),
-            Row(children: [
-              const Expanded(
-                child: Text(
-                  'Colores y preparaciones',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                ),
-              ),
-              IconButton(
-                onPressed: () => editColor(context, clientId: c.id),
-                icon: const Icon(Icons.add),
-                tooltip: 'Agregar color',
-              ),
-            ]),
-            const SizedBox(height: 8),
-            if (colors.isEmpty)
-              const Text('Todavía no guardaste colores para este cliente.'),
-            ...colors.map((color) => Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.color_lens_outlined),
-                    title: Text(
-                      color.name.isEmpty ? color.code : color.name,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Text([
-                      if (color.sector.isNotEmpty) 'Sector: ${color.sector}',
-                      if (color.code.isNotEmpty) 'Código: ${color.code}',
-                      if (color.preparation.isNotEmpty) color.preparation,
-                    ].join('\n')),
-                    onTap: () => editColor(context, clientId: c.id, color: color),
-                  ),
-                )),
-          ],
-        ),
-      );
-    });
-  }
-
-  Future<void> _addWork(BuildContext context, ClientData c) async {
-    final ctrl = TextEditingController();
-    final value = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Agregar trabajo / lugar'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Ej.: Casa, oficinas, quincho...',
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Agregar'),
+          const SizedBox(width: 2),
+          Transform.rotate(
+            angle: 0.10,
+            child: Icon(Icons.brush_rounded, size: 24, color: primary),
           ),
         ],
       ),
     );
-    if (value != null && value.isNotEmpty) {
-      c.works.add(value);
-      c.address = c.works.first;
-      await AppStore.instance.save();
-    }
-  }
-
-  Future<void> _deleteClient(BuildContext context, ClientData c) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Eliminar cliente'),
-        content: Text('¿Eliminar a ${c.name}?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Eliminar')),
-        ],
-      ),
-    );
-    if (ok == true) {
-      final s = AppStore.instance;
-      s.clients.removeWhere((x) => x.id == c.id);
-      s.colors.removeWhere((x) => x.clientId == c.id);
-      await s.save();
-      if (context.mounted) Navigator.pop(context);
-    }
   }
 }
 
-void editColor(BuildContext context, {required String clientId, ColorData? color}) {
-  final sector = TextEditingController(text: color?.sector ?? '');
-  final n = TextEditingController(text: color?.name ?? '');
-  final codeCtrl = TextEditingController(text: color?.code ?? '');
-  final prep = TextEditingController(text: color?.preparation ?? '');
-  final notes = TextEditingController(text: color?.notes ?? '');
-
-  final client = AppStore.instance.clients.where((c) => c.id == clientId).cast<ClientData?>().firstOrNull;
-
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (ctx) => Padding(
-      padding: EdgeInsets.fromLTRB(
-        20, 10, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom,
-      ),
-      child: SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(
-            color == null ? 'Nuevo color' : 'Editar color',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-          ),
-          if (client != null) ...[
-            const SizedBox(height: 4),
-            Text(client.name, style: TextStyle(color: Theme.of(ctx).colorScheme.primary)),
-          ],
-          const SizedBox(height: 14),
-          TextField(
-            controller: sector,
-            decoration: const InputDecoration(
-              labelText: 'Sector',
-              hintText: 'Ej.: Living, oficina, dormitorio...',
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(controller: n, decoration: const InputDecoration(labelText: 'Nombre del color')),
-          const SizedBox(height: 10),
-          TextField(controller: codeCtrl, decoration: const InputDecoration(labelText: 'Código del color')),
-          const SizedBox(height: 10),
-          TextField(
-            controller: prep,
-            minLines: 3,
-            maxLines: 6,
-            decoration: const InputDecoration(
-              labelText: 'Preparación / fórmula',
-              hintText: 'Ej.: Base blanca 4 L + 35 ml negro + 10 ml ocre',
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: notes,
-            minLines: 2,
-            maxLines: 5,
-            decoration: const InputDecoration(labelText: 'Observaciones'),
-          ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: () async {
-              if (n.text.trim().isEmpty && codeCtrl.text.trim().isEmpty) return;
-              final s = AppStore.instance;
-              if (color == null) {
-                s.colors.add(ColorData(
-                  id: DateTime.now().microsecondsSinceEpoch.toString(),
-                  clientId: clientId,
-                  sector: sector.text.trim(),
-                  name: n.text.trim(),
-                  code: codeCtrl.text.trim(),
-                  preparation: prep.text.trim(),
-                  notes: notes.text.trim(),
-                ));
-              } else {
-                color.sector = sector.text.trim();
-                color.name = n.text.trim();
-                color.code = codeCtrl.text.trim();
-                color.preparation = prep.text.trim();
-                color.notes = notes.text.trim();
-              }
-              await s.save();
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Guardar color'),
-          ),
-          if (color != null)
-            TextButton.icon(
-              onPressed: () async {
-                AppStore.instance.colors.removeWhere((x) => x.id == color.id);
-                await AppStore.instance.save();
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              icon: const Icon(Icons.delete_outline),
-              label: const Text('Eliminar color'),
-            ),
-        ]),
-      ),
-    ),
-  );
+class HomeScreen extends StatelessWidget{
+  final ValueChanged<int> onTab; const HomeScreen({super.key,required this.onTab});
+  @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__) {final pending=s.budgets.where((b)=>b.status=='Pendiente').length;final now=DateTime.now();final upcoming=s.appointments.where((a){final d=DateTime.tryParse(a.dateTime);return d!=null&&d.isAfter(now)&&d.isBefore(now.add(const Duration(days:7)));}).length;return Scaffold(appBar:const BrandAppBar(),body:ListView(padding:const EdgeInsets.all(20),children:[
+    Text(s.profile.userName.isEmpty?'¡Buen día! 👋':'¡Buen día, ${s.profile.userName}! 👋',style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800)),const SizedBox(height:18),
+    FilledButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const BudgetFlow())),icon:const Icon(Icons.add),label:const Text('Nuevo presupuesto'),style:FilledButton.styleFrom(minimumSize:const Size.fromHeight(58))),const SizedBox(height:14),
+    _HomeCard(Icons.people_outline,'Clientes','${s.clients.length} registrados',()=>onTab(1)),_HomeCard(Icons.description_outlined,'Presupuestos','$pending pendientes de ${s.budgets.length}',()=>onTab(2)),
+    _HomeCard(Icons.palette_outlined,'Colores / códigos','${s.colors.length} guardados',()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const ColorsScreen()))),
+    _HomeCard(Icons.calculate_outlined,'Calculadora','Sectores, paredes y calculadora rápida',()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const AdvancedCalculatorScreen()))),
+    _HomeCard(Icons.history_outlined,'Historial','Estados y ganancias por mes',()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const HistoryScreen()))),
+    _HomeCard(Icons.calendar_month_outlined,'Turnos, calendario y recordatorios','$upcoming próximos 7 días',()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const CalendarScreen()))),
+    _HomeCard(Icons.delete_outline,'Papelera','${s.trash.length} elementos · 7 días',()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const TrashScreen()))),]));});}
 }
+class _HomeCard extends StatelessWidget{final IconData icon;final String title,subtitle;final VoidCallback tap;const _HomeCard(this.icon,this.title,this.subtitle,this.tap);@override Widget build(BuildContext context)=>Card(child:ListTile(onTap:tap,leading:Icon(icon,color:Theme.of(context).colorScheme.primary),title:Text(title,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text(subtitle),trailing:const Icon(Icons.chevron_right)));}
 
-class ColorsScreen extends StatefulWidget {
-  const ColorsScreen({super.key});
-  @override
-  State<ColorsScreen> createState() => _ColorsScreenState();
+class ClientsScreen extends StatefulWidget{
+  const ClientsScreen({super.key}); @override State<ClientsScreen> createState()=>_ClientsScreenState();
+  static void editClient(BuildContext context,{ClientData? client})=>_ClientsScreenState.showEditor(context,client:client);
 }
+class _ClientsScreenState extends State<ClientsScreen>{String q='';
+  @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final x=q.trim().toLowerCase();final list=s.clients.where((c)=>x.isEmpty||c.name.toLowerCase().contains(x)||c.phone.contains(x)||c.dni.contains(x)||c.cuil.contains(x)||c.works.any((w)=>w.toLowerCase().contains(x))).toList();return Scaffold(appBar:const BrandAppBar(),floatingActionButton:FloatingActionButton.extended(onPressed:()=>showEditor(context),icon:const Icon(Icons.person_add),label:const Text('Nuevo cliente')),body:ListView(padding:const EdgeInsets.fromLTRB(20,20,20,100),children:[TextField(onChanged:(v)=>setState(()=>q=v),decoration:const InputDecoration(hintText:'Buscar cliente...',prefixIcon:Icon(Icons.search))),const SizedBox(height:14),if(list.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(22),child:Text('No hay clientes para mostrar.'))),...list.map((c)=>Card(child:ListTile(leading:CircleAvatar(child:Text(c.name.isEmpty?'?':c.name[0].toUpperCase())),title:Text(c.name,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text(c.works.isEmpty?'Sin trabajos guardados':'${c.works.length} trabajo${c.works.length==1?'':'s'}'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>ClientDetailScreen(clientId:c.id))))))]));});}
 
-class _ColorsScreenState extends State<ColorsScreen> {
-  String query = '';
+  static Future<void> pickContact(
+    BuildContext context,
+    TextEditingController n,
+    TextEditingController p,
+  ) async {
+    try {
+      final status = await FlutterContacts.permissions.request(PermissionType.readWrite);
+      final allowed =
+          status == PermissionStatus.granted || status == PermissionStatus.limited;
 
-  @override
-  Widget build(BuildContext context) {
-    final s = AppStore.instance;
-    return AnimatedBuilder(animation: s, builder: (_, __) {
-      final q = query.trim().toLowerCase();
-      final clients = s.clients.where((c) {
-        if (q.isEmpty) return true;
-        return c.name.toLowerCase().contains(q);
-      }).toList();
-
-      return Scaffold(
-        appBar: AppBar(title: const Text('Colores / códigos')),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            TextField(
-              onChanged: (v) => setState(() => query = v),
-              decoration: const InputDecoration(
-                hintText: 'Buscar cliente...',
-                prefixIcon: Icon(Icons.search),
+      if (!allowed) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('PintaM² necesita permiso para leer la agenda.'),
+              action: SnackBarAction(
+                label: 'Ajustes',
+                onPressed: () => FlutterContacts.permissions.openSettings(),
               ),
             ),
-            const SizedBox(height: 14),
-            if (clients.isEmpty)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(22),
-                  child: Center(child: Text('No se encontraron clientes.')),
-                ),
-              ),
-            ...clients.map((c) {
-              final count = s.colors.where((x) => x.clientId == c.id).length;
-              return Card(
-                child: ListTile(
-                  leading: const Icon(Icons.person_outline),
-                  title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: Text('$count código${count == 1 ? '' : 's'} de color'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => ClientColorCodesScreen(clientId: c.id)),
-                  ),
-                ),
-              );
-            }),
-          ],
-        ),
-      );
-    });
-  }
-}
-
-class ClientColorCodesScreen extends StatelessWidget {
-  final String clientId;
-  const ClientColorCodesScreen({super.key, required this.clientId});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppStore.instance;
-    return AnimatedBuilder(animation: s, builder: (_, __) {
-      final client = s.clients.where((c) => c.id == clientId).cast<ClientData?>().firstOrNull;
-      final colors = s.colors.where((x) => x.clientId == clientId).toList();
-      final sectors = <String, List<ColorData>>{};
-      for (final color in colors) {
-        final key = color.sector.trim().isEmpty ? 'Sin sector' : color.sector.trim();
-        sectors.putIfAbsent(key, () => []).add(color);
+          );
+        }
+        return;
       }
 
-      return Scaffold(
-        appBar: AppBar(title: Text(client?.name ?? 'Colores')),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => editColor(context, clientId: clientId),
-          icon: const Icon(Icons.add),
-          label: const Text('Agregar color'),
-        ),
-        body: colors.isEmpty
-            ? const Center(child: Text('Todavía no hay códigos guardados para este cliente.'))
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-                children: sectors.entries.map((entry) => Card(
-                  child: ExpansionTile(
-                    initiallyExpanded: true,
-                    title: Text(entry.key, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    children: entry.value.map((color) => ListTile(
-                      leading: const Icon(Icons.palette_outlined),
-                      title: Text(color.name.isEmpty ? color.code : color.name),
-                      subtitle: Text([
-                        if (color.code.isNotEmpty) 'Código: ${color.code}',
-                        if (color.preparation.isNotEmpty) color.preparation,
-                      ].join('\n')),
-                      onTap: () => editColor(context, clientId: clientId, color: color),
-                    )).toList(),
-                  ),
-                )).toList(),
-              ),
+      Contact? selected = await FlutterContacts.native.showPicker(
+        properties: {ContactProperty.name, ContactProperty.phone},
       );
-    });
+      if (selected == null) return;
+
+      if (selected.phones.isEmpty && selected.id != null) {
+        selected = await FlutterContacts.get(
+          selected.id!,
+          properties: {ContactProperty.name, ContactProperty.phone},
+        );
+      }
+      if (selected == null) return;
+
+      if ((selected.displayName ?? '').trim().isNotEmpty) {
+        n.text = selected.displayName!.trim();
+      }
+      if (selected.phones.isNotEmpty) {
+        p.text = selected.phones.first.number.trim();
+      } else if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('El contacto elegido no tiene número guardado.')),
+        );
+      }
+    } on PlatformException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo abrir la agenda: ${e.message ?? e.code}')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo seleccionar el contacto.')),
+        );
+      }
+    }
   }
+  static void showEditor(BuildContext context,{ClientData? client}){final n=TextEditingController(text:client?.name??''),p=TextEditingController(text:client?.phone??''),dni=TextEditingController(text:client?.dni??''),cuil=TextEditingController(text:client?.cuil??''),work=TextEditingController(text:client==null?'':(client.works.isNotEmpty?client.works.first:client.address));showModalBottomSheet(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>Padding(padding:EdgeInsets.fromLTRB(20,10,20,20+MediaQuery.of(ctx).viewInsets.bottom),child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[Text(client==null?'Nuevo cliente':'Editar cliente',style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800)),const SizedBox(height:14),TextField(controller:n,decoration:const InputDecoration(labelText:'Nombre')),const SizedBox(height:10),TextField(controller:p,keyboardType:TextInputType.phone,decoration:InputDecoration(labelText:'Teléfono',suffixIcon:IconButton(onPressed:()=>pickContact(ctx,n,p),icon:const Icon(Icons.contacts_outlined),tooltip:'Elegir desde agenda'))),const SizedBox(height:10),TextField(controller:dni,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'DNI')),const SizedBox(height:10),TextField(controller:cuil,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'CUIL')),const SizedBox(height:10),TextField(controller:work,decoration:const InputDecoration(labelText:'Primer trabajo / lugar',hintText:'Casa, oficinas, local...')),const SizedBox(height:16),FilledButton(onPressed:()async{if(n.text.trim().isEmpty)return;final s=AppStore.instance;if(client==null){final w=work.text.trim();s.clients.add(ClientData(id:DateTime.now().microsecondsSinceEpoch.toString(),name:n.text.trim(),phone:p.text.trim(),dni:dni.text.trim(),cuil:cuil.text.trim(),address:w,works:w.isEmpty?[]:[w]));}else{client.name=n.text.trim();client.phone=p.text.trim();client.dni=dni.text.trim();client.cuil=cuil.text.trim();final w=work.text.trim();if(client.works.isEmpty&&w.isNotEmpty)client.works.add(w);else if(client.works.isNotEmpty&&w.isNotEmpty)client.works[0]=w;client.address=client.works.isEmpty?'':client.works.first;}await s.save();if(ctx.mounted)Navigator.pop(ctx);},child:const Text('Guardar'))]))));}
 }
+
+class ClientDetailScreen extends StatelessWidget{final String clientId;const ClientDetailScreen({super.key,required this.clientId});
+  @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final c=s.clients.where((x)=>x.id==clientId).cast<ClientData?>().firstOrNull;if(c==null)return Scaffold(appBar:AppBar(),body:const Center(child:Text('Cliente eliminado')));return Scaffold(appBar:AppBar(title:Text(c.name),actions:[IconButton(onPressed:()=>ClientsScreen.editClient(context,client:c),icon:const Icon(Icons.edit_outlined)),IconButton(onPressed:()async{final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Enviar a papelera'),content:Text('¿Mover a ${c.name} a la papelera?'),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Mover'))]));if(ok==true){await s.moveClientToTrash(c);if(context.mounted)Navigator.pop(context);}},icon:const Icon(Icons.delete_outline))]),floatingActionButton:FloatingActionButton.extended(onPressed:()async{final t=TextEditingController();final v=await showDialog<String>(context:context,builder:(d)=>AlertDialog(title:const Text('Agregar trabajo / lugar'),content:TextField(controller:t,decoration:const InputDecoration(labelText:'Casa, oficinas, quincho...')),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,t.text.trim()),child:const Text('Agregar'))]));if(v!=null&&v.isNotEmpty){c.works.add(v);c.address=c.works.first;await s.save();}},icon:const Icon(Icons.add_home_work_outlined),label:const Text('Agregar trabajo')),body:ListView(padding:const EdgeInsets.fromLTRB(20,20,20,100),children:[if(c.phone.isNotEmpty)ListTile(leading:const Icon(Icons.phone_outlined),title:Text(c.phone)),if(c.dni.isNotEmpty)ListTile(leading:const Icon(Icons.badge_outlined),title:Text('DNI ${c.dni}')),if(c.cuil.isNotEmpty)ListTile(leading:const Icon(Icons.receipt_long_outlined),title:Text('CUIL ${c.cuil}')),const SizedBox(height:10),const Text('Trabajos / lugares',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800)),...c.works.map((w){final count=s.colors.where((x)=>x.clientId==c.id&&(x.workName==w||(x.workName.isEmpty&&c.works.first==w))).length;return Card(child:ListTile(leading:const Icon(Icons.home_work_outlined),title:Text(w,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text('$count colores/códigos'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>WorkColorScreen(clientId:c.id,workName:w)))));})]));});}
+}
+
+class WorkColorScreen extends StatelessWidget{final String clientId,workName;const WorkColorScreen({super.key,required this.clientId,required this.workName});
+  @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final c=s.clients.where((x)=>x.id==clientId).cast<ClientData?>().firstOrNull;final legacyFirst=c!=null&&c.works.isNotEmpty&&c.works.first==workName;final list=s.colors.where((x)=>x.clientId==clientId&&(x.workName==workName||(legacyFirst&&x.workName.isEmpty))).toList();return Scaffold(appBar:AppBar(title:Text(workName)),floatingActionButton:FloatingActionButton.extended(onPressed:()=>editColor(context,clientId:clientId,workName:workName),icon:const Icon(Icons.add),label:const Text('Agregar color')),body:ListView(padding:const EdgeInsets.fromLTRB(20,20,20,100),children:[if(c!=null)Text(c.name,style:TextStyle(color:Theme.of(context).colorScheme.primary,fontWeight:FontWeight.w800)),const SizedBox(height:10),if(list.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(22),child:Text('No hay colores guardados para este trabajo.'))),...list.map((x)=>Card(child:ListTile(leading:const Icon(Icons.palette_outlined),title:Text(x.name.isEmpty?x.code:x.name,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text([if(x.sector.isNotEmpty)'Sector: ${x.sector}',if(x.code.isNotEmpty)'Código: ${x.code}',if(x.preparation.isNotEmpty)x.preparation].join('\n')),onTap:()=>editColor(context,clientId:clientId,workName:workName,color:x))))]));});}
+}
+
+void editColor(BuildContext context,{required String clientId,required String workName,ColorData? color}){final sector=TextEditingController(text:color?.sector??''),n=TextEditingController(text:color?.name??''),cc=TextEditingController(text:color?.code??''),prep=TextEditingController(text:color?.preparation??''),notes=TextEditingController(text:color?.notes??'');showModalBottomSheet(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>Padding(padding:EdgeInsets.fromLTRB(20,10,20,20+MediaQuery.of(ctx).viewInsets.bottom),child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[Text(color==null?'Nuevo color':'Editar color',style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800)),const SizedBox(height:12),TextField(controller:sector,decoration:const InputDecoration(labelText:'Sector')),const SizedBox(height:8),TextField(controller:n,decoration:const InputDecoration(labelText:'Nombre del color')),const SizedBox(height:8),TextField(controller:cc,decoration:const InputDecoration(labelText:'Código')),const SizedBox(height:8),TextField(controller:prep,minLines:3,maxLines:6,decoration:const InputDecoration(labelText:'Preparación / fórmula')),const SizedBox(height:8),TextField(controller:notes,minLines:2,maxLines:4,decoration:const InputDecoration(labelText:'Observaciones')),const SizedBox(height:14),FilledButton(onPressed:()async{if(n.text.trim().isEmpty&&cc.text.trim().isEmpty)return;final s=AppStore.instance;if(color==null)s.colors.add(ColorData(id:DateTime.now().microsecondsSinceEpoch.toString(),clientId:clientId,workName:workName,sector:sector.text.trim(),name:n.text.trim(),code:cc.text.trim(),preparation:prep.text.trim(),notes:notes.text.trim()));else{color.workName=workName;color.sector=sector.text.trim();color.name=n.text.trim();color.code=cc.text.trim();color.preparation=prep.text.trim();color.notes=notes.text.trim();}await s.save();if(ctx.mounted)Navigator.pop(ctx);},child:const Text('Guardar color')),if(color!=null)TextButton.icon(onPressed:()async{await AppStore.instance.moveColorToTrash(color);if(ctx.mounted)Navigator.pop(ctx);},icon:const Icon(Icons.delete_outline),label:const Text('Mover a papelera'))]))));}
+
+class ColorsScreen extends StatefulWidget{const ColorsScreen({super.key});@override State<ColorsScreen> createState()=>_ColorsScreenState();}
+class _ColorsScreenState extends State<ColorsScreen>{String q='';@override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final x=q.trim().toLowerCase();final list=s.clients.where((c)=>x.isEmpty||c.name.toLowerCase().contains(x)).toList();return Scaffold(appBar:AppBar(title:const Text('Colores / códigos')),body:ListView(padding:const EdgeInsets.all(20),children:[TextField(onChanged:(v)=>setState(()=>q=v),decoration:const InputDecoration(hintText:'Buscar cliente...',prefixIcon:Icon(Icons.search))),const SizedBox(height:14),...list.map((c)=>Card(child:ListTile(leading:const Icon(Icons.person_outline),title:Text(c.name,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text('${c.works.length} trabajos'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>ClientWorksForColorsScreen(clientId:c.id))))))]));});}}
+class ClientWorksForColorsScreen extends StatelessWidget{final String clientId;const ClientWorksForColorsScreen({super.key,required this.clientId});@override Widget build(BuildContext context){final s=AppStore.instance;final c=s.clients.where((x)=>x.id==clientId).cast<ClientData?>().firstOrNull;return Scaffold(appBar:AppBar(title:Text(c?.name??'Trabajos')),body:c==null?const Center(child:Text('Cliente no disponible')):ListView(padding:const EdgeInsets.all(20),children:[if(c.works.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(20),child:Text('Este cliente no tiene trabajos guardados.'))),...c.works.map((w)=>Card(child:ListTile(leading:const Icon(Icons.home_work_outlined),title:Text(w),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>WorkColorScreen(clientId:c.id,workName:w))))))]));}}
 
 class MeasurementLine {
   String label;
@@ -1133,7 +658,6 @@ class MeasurementResult {
   const MeasurementResult(this.total, this.detail, this.sectorPriceTotal);
 }
 
-
 class TraditionalCalculatorScreen extends StatefulWidget {
   const TraditionalCalculatorScreen({super.key});
   @override
@@ -1145,12 +669,13 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
   String expression = '';
   final List<String> history = [];
   double? first;
-  String? operation;
-  bool replaceDisplay = true;
+  String? op;
+  bool replace = true;
 
-  double get currentValue => double.tryParse(display.replaceAll(',', '.')) ?? 0;
+  double get currentValue =>
+      double.tryParse(display.replaceAll(',', '.')) ?? 0;
 
-  String formatNumber(double value) {
+  String fmt(double value) {
     if (value == value.truncateToDouble()) return value.toStringAsFixed(0);
     return value
         .toStringAsFixed(2)
@@ -1159,125 +684,131 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
         .replaceAll('.', ',');
   }
 
-  void inputDigit(String digit) {
+  void digit(String d) {
     setState(() {
-      if (replaceDisplay || display == '0') {
-        display = digit;
-        replaceDisplay = false;
+      if (replace || display == '0') {
+        display = d;
+        replace = false;
       } else {
-        display += digit;
+        display += d;
       }
-      expression = _composeExpression();
+      _updateExpression();
     });
   }
 
-  void inputDecimal() {
+  void decimal() {
     setState(() {
-      if (replaceDisplay) {
+      if (replace) {
         display = '0,';
-        replaceDisplay = false;
+        replace = false;
       } else if (!display.contains(',')) {
         display += ',';
       }
-      expression = _composeExpression();
+      _updateExpression();
     });
   }
 
   void backspace() {
     setState(() {
-      if (replaceDisplay) return;
+      if (replace) return;
       if (display.length <= 1) {
         display = '0';
-        replaceDisplay = true;
+        replace = true;
       } else {
         display = display.substring(0, display.length - 1);
       }
-      expression = _composeExpression();
+      _updateExpression();
     });
   }
 
-  String _composeExpression() {
-    if (first != null && operation != null) {
-      return '${formatNumber(first!)} $operation ${replaceDisplay ? '' : display}'.trimRight();
+  void _updateExpression() {
+    if (first != null && op != null) {
+      expression =
+          '${fmt(first!)} $op ${replace ? '' : display}'.trimRight();
+    } else {
+      expression = display;
     }
-    return display;
   }
 
-  void setOperation(String op) {
+  void operation(String value) {
     setState(() {
-      if (first != null && operation != null && !replaceDisplay) {
-        _calculate(addToHistory: false);
+      if (first != null && op != null && !replace) {
+        _calculate(addHistory: false);
       }
       first = currentValue;
-      operation = op;
-      replaceDisplay = true;
-      expression = '${formatNumber(first!)} $op';
+      op = value;
+      replace = true;
+      expression = '${fmt(first!)} $value';
     });
   }
 
-  double _apply(double a, String op, double b) {
-    switch (op) {
-      case '+':
-        return a + b;
-      case '-':
-        return a - b;
-      case '×':
-        return a * b;
-      case '÷':
-        return b == 0 ? 0 : a / b;
-      default:
-        return b;
-    }
+  double _apply(double a, String operation, double b) {
+    if (operation == '+') return a + b;
+    if (operation == '-') return a - b;
+    if (operation == '×') return a * b;
+    if (operation == '÷') return b == 0 ? 0 : a / b;
+    return b;
   }
 
-  void _calculate({bool addToHistory = true}) {
-    if (first == null || operation == null) return;
-    final second = currentValue;
+  void _calculate({bool addHistory = true}) {
+    if (first == null || op == null) return;
     final a = first!;
-    final op = operation!;
-    final result = _apply(a, op, second);
-    final line = '${formatNumber(a)} $op ${formatNumber(second)} = ${formatNumber(result)}';
-    if (addToHistory) history.add(line);
-    display = formatNumber(result);
+    final operation = op!;
+    final b = currentValue;
+    final result = _apply(a, operation, b);
+    final line = '${fmt(a)} $operation ${fmt(b)} = ${fmt(result)}';
+
+    if (addHistory) history.add(line);
+    display = fmt(result);
     expression = line;
     first = null;
-    operation = null;
-    replaceDisplay = true;
+    op = null;
+    replace = true;
   }
 
   void equals() => setState(() => _calculate());
 
-  void clearAll() {
+  void clear() {
     setState(() {
       display = '0';
       expression = '';
       first = null;
-      operation = null;
-      replaceDisplay = true;
+      op = null;
+      replace = true;
     });
   }
 
-  Future<void> quickM2() async {
+  Future<void> m2() async {
     final largo = TextEditingController();
     final alto = TextEditingController();
+
     final result = await showDialog<double>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Cálculo rápido de m²'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            controller: largo,
-            autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Largo (m)'),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: alto,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Alto (m)'),
-          ),
-        ]),
+        title: const Text('M² rápido'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Ingresá largo y alto.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: largo,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration:
+                  const InputDecoration(labelText: 'Largo', suffixText: 'm'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: alto,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration:
+                  const InputDecoration(labelText: 'Alto', suffixText: 'm'),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -1285,11 +816,13 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
           ),
           FilledButton(
             onPressed: () {
-              final l = double.tryParse(largo.text.replaceAll(',', '.')) ?? 0;
-              final h = double.tryParse(alto.text.replaceAll(',', '.')) ?? 0;
+              final l =
+                  double.tryParse(largo.text.replaceAll(',', '.')) ?? 0;
+              final h =
+                  double.tryParse(alto.text.replaceAll(',', '.')) ?? 0;
               Navigator.pop(ctx, l * h);
             },
-            child: const Text('Calcular'),
+            child: const Text('Calcular m²'),
           ),
         ],
       ),
@@ -1297,26 +830,26 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
 
     if (result != null) {
       setState(() {
-        final line = 'M²: ${formatNumber(result)}';
+        final line = 'M²: ${fmt(result)}';
         history.add(line);
-        display = formatNumber(result);
+        display = fmt(result);
         expression = line;
-        replaceDisplay = true;
+        replace = true;
       });
     }
   }
 
   Widget keyButton(
     String text, {
-    VoidCallback? onPressed,
-    bool strong = false,
+    required VoidCallback onPressed,
+    bool primary = false,
     int flex = 1,
   }) {
     return Expanded(
       flex: flex,
       child: Padding(
         padding: const EdgeInsets.all(4),
-        child: strong
+        child: primary
             ? FilledButton(
                 onPressed: onPressed,
                 style: FilledButton.styleFrom(
@@ -1325,7 +858,10 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
                 ),
                 child: Text(
                   text,
-                  style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               )
             : FilledButton.tonal(
@@ -1336,7 +872,10 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
                 ),
                 child: Text(
                   text,
-                  style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
       ),
@@ -1348,111 +887,147 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
     return Scaffold(
       appBar: AppBar(title: const Text('Calculadora')),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Historial arriba: los cálculos nuevos van quedando abajo
-            // y los anteriores "suben", como una calculadora real.
-            Expanded(
-              child: history.isEmpty
-                  ? Center(
-                      child: Text(
-                        'El historial aparecerá acá',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
-                      itemCount: history.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 6),
-                      itemBuilder: (_, i) => Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          history[i],
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: Column(
+              children: [
+                // Historial arriba. Los cálculos anteriores van "subiendo".
+                Expanded(
+                  child: history.isEmpty
+                      ? Center(
+                          child: Text(
+                            'El historial aparecerá acá',
+                            style: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          padding:
+                              const EdgeInsets.fromLTRB(18, 12, 18, 8),
+                          itemCount: history.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 6),
+                          itemBuilder: (_, i) => Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              history[i],
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
                           ),
                         ),
+                ),
+
+                // Operación en curso + resultado.
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.fromLTRB(18, 10, 18, 10),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(
+                        color: Theme.of(context).dividerColor,
                       ),
                     ),
-            ),
-
-            // Operación actual y resultado justo encima del teclado.
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: Theme.of(context).dividerColor),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        expression.isEmpty ? ' ' : expression,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 17,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      SelectableText(
+                        display,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 42,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    expression.isEmpty ? ' ' : expression,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 17,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  SelectableText(
-                    display,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      fontSize: 42,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
-            ),
 
-            // Teclado ordenado y pegado al borde inferior.
-            Container(
-              padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
-              color: Theme.of(context).colorScheme.surface,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(children: [
-                    keyButton('C', onPressed: clearAll),
-                    keyButton('M²', onPressed: quickM2, strong: true),
-                    keyButton('÷', onPressed: () => setOperation('÷')),
-                    keyButton('×', onPressed: () => setOperation('×')),
-                  ]),
-                  Row(children: [
-                    keyButton('7', onPressed: () => inputDigit('7')),
-                    keyButton('8', onPressed: () => inputDigit('8')),
-                    keyButton('9', onPressed: () => inputDigit('9')),
-                    keyButton('-', onPressed: () => setOperation('-')),
-                  ]),
-                  Row(children: [
-                    keyButton('4', onPressed: () => inputDigit('4')),
-                    keyButton('5', onPressed: () => inputDigit('5')),
-                    keyButton('6', onPressed: () => inputDigit('6')),
-                    keyButton('+', onPressed: () => setOperation('+')),
-                  ]),
-                  Row(children: [
-                    keyButton('1', onPressed: () => inputDigit('1')),
-                    keyButton('2', onPressed: () => inputDigit('2')),
-                    keyButton('3', onPressed: () => inputDigit('3')),
-                    keyButton('=', onPressed: equals, strong: true),
-                  ]),
-                  Row(children: [
-                    keyButton('0', onPressed: () => inputDigit('0'), flex: 2),
-                    keyButton(',', onPressed: inputDecimal),
-                    keyButton('⌫', onPressed: backspace),
-                  ]),
-                ],
-              ),
+                // Teclado ordenado y apoyado en el borde inferior.
+                Container(
+                  padding:
+                      const EdgeInsets.fromLTRB(8, 6, 8, 4),
+                  color: Theme.of(context).colorScheme.surface,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(children: [
+                        keyButton('C', onPressed: clear),
+                        keyButton('M²', onPressed: m2, primary: true),
+                        keyButton(
+                          '÷',
+                          onPressed: () => operation('÷'),
+                        ),
+                        keyButton(
+                          '×',
+                          onPressed: () => operation('×'),
+                        ),
+                      ]),
+                      Row(children: [
+                        keyButton('7', onPressed: () => digit('7')),
+                        keyButton('8', onPressed: () => digit('8')),
+                        keyButton('9', onPressed: () => digit('9')),
+                        keyButton(
+                          '-',
+                          onPressed: () => operation('-'),
+                        ),
+                      ]),
+                      Row(children: [
+                        keyButton('4', onPressed: () => digit('4')),
+                        keyButton('5', onPressed: () => digit('5')),
+                        keyButton('6', onPressed: () => digit('6')),
+                        keyButton(
+                          '+',
+                          onPressed: () => operation('+'),
+                        ),
+                      ]),
+                      Row(children: [
+                        keyButton('1', onPressed: () => digit('1')),
+                        keyButton('2', onPressed: () => digit('2')),
+                        keyButton('3', onPressed: () => digit('3')),
+                        keyButton(
+                          '=',
+                          onPressed: equals,
+                          primary: true,
+                        ),
+                      ]),
+                      Row(children: [
+                        keyButton(
+                          '0',
+                          onPressed: () => digit('0'),
+                          flex: 2,
+                        ),
+                        keyButton(',', onPressed: decimal),
+                        keyButton('⌫', onPressed: backspace),
+                      ]),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1462,11 +1037,13 @@ class _TraditionalCalculatorScreenState extends State<TraditionalCalculatorScree
 class MaterialsCalculatorScreen extends StatefulWidget {
   const MaterialsCalculatorScreen({super.key});
   @override
-  State<MaterialsCalculatorScreen> createState() => _MaterialsCalculatorScreenState();
+  State<MaterialsCalculatorScreen> createState() =>
+      _MaterialsCalculatorScreenState();
 }
 
-class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
-  static const _storageKey = 'pintam2_material_yields_v094';
+class _MaterialsCalculatorScreenState
+    extends State<MaterialsCalculatorScreen> {
+  static const _storageKey = 'pintam2_material_yields_v012';
 
   final area = TextEditingController();
   final coats = TextEditingController(text: '2');
@@ -1493,17 +1070,22 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
     final sp = await SharedPreferences.getInstance();
     final raw = sp.getString(_storageKey);
     if (raw == null) return;
+
     try {
       final decoded = Map<String, dynamic>.from(jsonDecode(raw));
       final loaded = <String, double>{};
       for (final e in decoded.entries) {
         loaded[e.key] = (e.value as num).toDouble();
       }
+
       if (loaded.isNotEmpty && mounted) {
         setState(() {
           materials = loaded;
-          if (!materials.containsKey(material)) material = materials.keys.first;
-          yieldCtrl.text = materials[material]!.toStringAsFixed(0);
+          if (!materials.containsKey(material)) {
+            material = materials.keys.first;
+          }
+          yieldCtrl.text =
+              materials[material]!.toStringAsFixed(0);
         });
       }
     } catch (_) {}
@@ -1515,9 +1097,12 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
   }
 
   void calculate() {
-    final m2 = double.tryParse(area.text.replaceAll(',', '.')) ?? 0;
-    final hands = double.tryParse(coats.text.replaceAll(',', '.')) ?? 0;
-    final performance = double.tryParse(yieldCtrl.text.replaceAll(',', '.')) ?? 0;
+    final m2 =
+        double.tryParse(area.text.replaceAll(',', '.')) ?? 0;
+    final hands =
+        double.tryParse(coats.text.replaceAll(',', '.')) ?? 0;
+    final performance =
+        double.tryParse(yieldCtrl.text.replaceAll(',', '.')) ?? 0;
 
     if (performance > 0) {
       materials[material] = performance;
@@ -1525,15 +1110,16 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
     }
 
     setState(() {
-      result = performance <= 0 ? 0 : (m2 * hands) / performance;
+      result =
+          performance <= 0 ? 0 : (m2 * hands) / performance;
     });
   }
 
   Future<void> addMaterial() async {
     final name = TextEditingController();
-    final rendimiento = TextEditingController();
+    final performance = TextEditingController();
 
-    final saved = await showDialog<bool>(
+    final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Agregar material'),
@@ -1544,14 +1130,15 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
               controller: name,
               autofocus: true,
               decoration: const InputDecoration(
-                labelText: 'Nombre',
+                labelText: 'Nombre del material',
                 hintText: 'Ej.: Fijador, impermeabilizante...',
               ),
             ),
             const SizedBox(height: 10),
             TextField(
-              controller: rendimiento,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              controller: performance,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'Rendimiento',
                 suffixText: 'm²/L',
@@ -1572,14 +1159,22 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
       ),
     );
 
-    if (saved == true) {
-      final n = name.text.trim();
-      final r = double.tryParse(rendimiento.text.replaceAll(',', '.')) ?? 0;
-      if (n.isNotEmpty && r > 0) {
+    if (ok == true) {
+      final nameValue = name.text.trim();
+      final performanceValue = double.tryParse(
+            performance.text.replaceAll(',', '.'),
+          ) ??
+          0;
+
+      if (nameValue.isNotEmpty && performanceValue > 0) {
         setState(() {
-          materials[n] = r;
-          material = n;
-          yieldCtrl.text = r.toStringAsFixed(r == r.truncateToDouble() ? 0 : 2);
+          materials[nameValue] = performanceValue;
+          material = nameValue;
+          yieldCtrl.text = performanceValue.toStringAsFixed(
+            performanceValue == performanceValue.truncateToDouble()
+                ? 0
+                : 2,
+          );
           result = null;
         });
         await _saveMaterials();
@@ -1587,18 +1182,33 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
     }
   }
 
+  Future<void> saveCurrentYield() async {
+    final value =
+        double.tryParse(yieldCtrl.text.replaceAll(',', '.')) ?? 0;
+    if (value <= 0) return;
+    materials[material] = value;
+    await _saveMaterials();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Rendimiento guardado')),
+      );
+    }
+  }
+
   Future<void> deleteCurrentMaterial() async {
-    // Protegemos los cinco materiales iniciales.
-    const protected = {
+    const baseMaterials = {
       'Látex interior',
       'Látex exterior',
       'Esmalte sintético',
       'Barniz',
       'Membrana líquida',
     };
-    if (protected.contains(material)) {
+
+    if (baseMaterials.contains(material)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Este material base no se puede eliminar.')),
+        const SnackBar(
+          content: Text('Los materiales base no se eliminan.'),
+        ),
       );
       return;
     }
@@ -1607,7 +1217,7 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar material'),
-        content: Text('¿Eliminar "$material" de la calculadora?'),
+        content: Text('¿Eliminar "$material"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -1625,7 +1235,8 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
       setState(() {
         materials.remove(material);
         material = materials.keys.first;
-        yieldCtrl.text = materials[material]!.toStringAsFixed(0);
+        yieldCtrl.text =
+            materials[material]!.toStringAsFixed(0);
         result = null;
       });
       await _saveMaterials();
@@ -1633,110 +1244,115 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('Calculadora de materiales'),
-          actions: [
-            IconButton(
-              tooltip: 'Agregar material',
-              onPressed: addMaterial,
-              icon: const Icon(Icons.add_circle_outline),
-            ),
-          ],
-        ),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            const Text(
-              'Cantidad aproximada de material',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Fórmula: m² × manos ÷ rendimiento. Los rendimientos que modifiques '
-              'y los materiales que agregues quedan guardados.',
-            ),
-            const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: material,
-                    decoration: const InputDecoration(labelText: 'Material'),
-                    items: materials.keys
-                        .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                        .toList(),
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() {
-                        material = v;
-                        final r = materials[v]!;
-                        yieldCtrl.text = r.toStringAsFixed(
-                          r == r.truncateToDouble() ? 0 : 2,
-                        );
-                        result = null;
-                      });
-                    },
-                  ),
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Calculadora de materiales'),
+        actions: [
+          IconButton(
+            tooltip: 'Agregar material',
+            onPressed: addMaterial,
+            icon: const Icon(Icons.add_circle_outline),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text(
+            'Cantidad aproximada',
+            style:
+                TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Fórmula: m² × manos ÷ rendimiento. '
+            'Los materiales nuevos y los rendimientos editados quedan guardados.',
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: material,
+                  decoration:
+                      const InputDecoration(labelText: 'Material'),
+                  items: materials.keys
+                      .map(
+                        (m) => DropdownMenuItem(
+                          value: m,
+                          child: Text(m),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() {
+                      material = v;
+                      final r = materials[v]!;
+                      yieldCtrl.text = r.toStringAsFixed(
+                        r == r.truncateToDouble() ? 0 : 2,
+                      );
+                      result = null;
+                    });
+                  },
                 ),
-                const SizedBox(width: 8),
-                IconButton.filledTonal(
-                  tooltip: 'Agregar material',
-                  onPressed: addMaterial,
-                  icon: const Icon(Icons.add),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: area,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Superficie',
-                suffixText: 'm²',
               ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                tooltip: 'Agregar material',
+                onPressed: addMaterial,
+                icon: const Icon(Icons.add),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: area,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'Superficie',
+              suffixText: 'm²',
             ),
-            const SizedBox(height: 12),
-            Row(children: [
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
               Expanded(
                 child: TextField(
                   controller: coats,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Manos'),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration:
+                      const InputDecoration(labelText: 'Manos'),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: TextField(
                   controller: yieldCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(
                     labelText: 'Rendimiento',
                     suffixText: 'm²/L',
                   ),
                 ),
               ),
-            ]),
-            const SizedBox(height: 10),
-            Row(children: [
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final r = double.tryParse(
-                          yieldCtrl.text.replaceAll(',', '.'),
-                        ) ??
-                        0;
-                    if (r > 0) {
-                      materials[material] = r;
-                      await _saveMaterials();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Rendimiento guardado')),
-                        );
-                      }
-                    }
-                  },
+                  onPressed: saveCurrentYield,
                   icon: const Icon(Icons.save_outlined),
                   label: const Text('Guardar rendimiento'),
                 ),
@@ -1747,46 +1363,50 @@ class _MaterialsCalculatorScreenState extends State<MaterialsCalculatorScreen> {
                 onPressed: deleteCurrentMaterial,
                 icon: const Icon(Icons.delete_outline),
               ),
-            ]),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: calculate,
-              icon: const Icon(Icons.calculate_outlined),
-              label: const Text('Calcular material'),
-            ),
-            if (result != null) ...[
-              const SizedBox(height: 18),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      Text(
-                        material,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+            ],
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: calculate,
+            icon: const Icon(Icons.calculate_outlined),
+            label: const Text('Calcular material'),
+          ),
+          if (result != null) ...[
+            const SizedBox(height: 18),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Text(
+                      material,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
                       ),
-                      const SizedBox(height: 6),
-                      SelectableText(
-                        '${result!.toStringAsFixed(2)} L aprox.',
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                        ),
+                    ),
+                    const SizedBox(height: 6),
+                    SelectableText(
+                      '${result!.toStringAsFixed(2)} L aprox.',
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${area.text.isEmpty ? '0' : area.text} m² × '
-                        '${coats.text} manos ÷ ${yieldCtrl.text} m²/L',
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${area.text.isEmpty ? '0' : area.text} m² × '
+                      '${coats.text} manos ÷ ${yieldCtrl.text} m²/L',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ],
-        ),
-      );
+        ],
+      ),
+    );
+  }
 }
 
 class AdvancedCalculatorScreen extends StatefulWidget {
@@ -1821,32 +1441,43 @@ class _AdvancedCalculatorScreenState extends State<AdvancedCalculatorScreen> {
           children: [
             const Text(
               'Medí pared por pared',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+              ),
             ),
             const SizedBox(height: 10),
-            Row(children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const TraditionalCalculatorScreen()),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const TraditionalCalculatorScreen(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.calculate_outlined),
+                    label: const Text('Calculadora'),
                   ),
-                  icon: const Icon(Icons.calculate_outlined),
-                  label: const Text('Calculadora'),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const MaterialsCalculatorScreen()),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const MaterialsCalculatorScreen(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.format_paint_outlined),
+                    label: const Text('Materiales'),
                   ),
-                  icon: const Icon(Icons.format_paint_outlined),
-                  label: const Text('Materiales'),
                 ),
-              ),
-            ]),
+              ],
+            ),
             const SizedBox(height: 10),
             const Text(
               'Separá living, cocina, dormitorios, baño u otros sectores. '
@@ -2120,6 +1751,12 @@ class _AdvancedCalculatorScreenState extends State<AdvancedCalculatorScreen> {
   }
 }
 
+class CalendarScreen extends StatefulWidget{const CalendarScreen({super.key});@override State<CalendarScreen> createState()=>_CalendarScreenState();}
+class _CalendarScreenState extends State<CalendarScreen>{DateTime selected=DateTime.now();bool same(DateTime a,DateTime b)=>a.year==b.year&&a.month==b.month&&a.day==b.day;@override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final list=s.appointments.where((a){final d=DateTime.tryParse(a.dateTime);return d!=null&&same(d,selected);}).toList()..sort((a,b)=>a.dateTime.compareTo(b.dateTime));return Scaffold(appBar:AppBar(title:const Text('Turnos y recordatorios')),floatingActionButton:FloatingActionButton.extended(onPressed:()=>editAppointment(context,initialDate:selected),icon:const Icon(Icons.add),label:const Text('Nuevo turno')),body:ListView(padding:const EdgeInsets.fromLTRB(16,12,16,100),children:[Card(child:CalendarDatePicker(initialDate:selected,firstDate:DateTime(2024),lastDate:DateTime(2035),onDateChanged:(d)=>setState(()=>selected=d))),const SizedBox(height:10),Text('Turnos del ${selected.day}/${selected.month}/${selected.year}',style:const TextStyle(fontSize:18,fontWeight:FontWeight.w800)),if(list.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(18),child:Text('No hay turnos para este día.'))),...list.map((a){final d=DateTime.tryParse(a.dateTime)!;return Card(child:ListTile(leading:Icon(a.reminder?Icons.notifications_active_outlined:Icons.event_outlined),title:Text(a.title),subtitle:Text('${d.hour.toString().padLeft(2,'0')}:${d.minute.toString().padLeft(2,'0')}${a.client.isEmpty?'':' · ${a.client}'}${a.reminder?' · recordatorio':''}'),trailing:const Icon(Icons.chevron_right),onTap:()=>editAppointment(context,appointment:a)));})]));});}}
+Future<void> editAppointment(BuildContext context,{AppointmentData? appointment,DateTime? initialDate})async{final title=TextEditingController(text:appointment?.title??''),client=TextEditingController(text:appointment?.client??''),notes=TextEditingController(text:appointment?.notes??'');DateTime dt=DateTime.tryParse(appointment?.dateTime??'')??DateTime((initialDate??DateTime.now()).year,(initialDate??DateTime.now()).month,(initialDate??DateTime.now()).day,9);bool rem=appointment?.reminder??false;await showModalBottomSheet(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>StatefulBuilder(builder:(ctx,setL)=>Padding(padding:EdgeInsets.fromLTRB(20,10,20,20+MediaQuery.of(ctx).viewInsets.bottom),child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[Text(appointment==null?'Nuevo turno':'Editar turno',style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800)),const SizedBox(height:12),TextField(controller:title,decoration:const InputDecoration(labelText:'Título')),const SizedBox(height:8),TextField(controller:client,decoration:const InputDecoration(labelText:'Cliente (opcional)')),ListTile(leading:const Icon(Icons.calendar_today_outlined),title:Text('${dt.day}/${dt.month}/${dt.year}'),onTap:()async{final d=await showDatePicker(context:ctx,firstDate:DateTime(2024),lastDate:DateTime(2035),initialDate:dt);if(d!=null)setL(()=>dt=DateTime(d.year,d.month,d.day,dt.hour,dt.minute));}),ListTile(leading:const Icon(Icons.access_time),title:Text('${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}'),onTap:()async{final t=await showTimePicker(context:ctx,initialTime:TimeOfDay.fromDateTime(dt));if(t!=null)setL(()=>dt=DateTime(dt.year,dt.month,dt.day,t.hour,t.minute));}),SwitchListTile(value:rem,onChanged:(v)=>setL(()=>rem=v),title:const Text('Recordatorio'),subtitle:const Text('Queda marcado dentro de PintaM²')),TextField(controller:notes,minLines:2,maxLines:5,decoration:const InputDecoration(labelText:'Notas')),const SizedBox(height:12),FilledButton(onPressed:()async{if(title.text.trim().isEmpty)return;final s=AppStore.instance;if(appointment==null)s.appointments.add(AppointmentData(id:DateTime.now().microsecondsSinceEpoch.toString(),title:title.text.trim(),client:client.text.trim(),notes:notes.text.trim(),dateTime:dt.toIso8601String(),reminder:rem));else{appointment.title=title.text.trim();appointment.client=client.text.trim();appointment.notes=notes.text.trim();appointment.dateTime=dt.toIso8601String();appointment.reminder=rem;}await s.save();if(ctx.mounted)Navigator.pop(ctx);},child:const Text('Guardar turno')),if(appointment!=null)TextButton.icon(onPressed:()async{await AppStore.instance.moveAppointmentToTrash(appointment);if(ctx.mounted)Navigator.pop(ctx);},icon:const Icon(Icons.delete_outline),label:const Text('Mover a papelera'))])))));}
+
+class TrashScreen extends StatelessWidget{const TrashScreen({super.key});@override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__)=>(Scaffold(appBar:AppBar(title:const Text('Papelera'),actions:[TextButton(onPressed:s.trash.isEmpty?null:()async{final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Vaciar papelera'),content:const Text('Se eliminará todo definitivamente.'),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Vaciar'))]));if(ok==true)await s.emptyTrash();},child:const Text('Vaciar'))]),body:s.trash.isEmpty?const Center(child:Text('La papelera está vacía.')):ListView(padding:const EdgeInsets.all(20),children:s.trash.map((t){final d=DateTime.tryParse(t.deletedAt)??DateTime.now();final days=(7-DateTime.now().difference(d).inDays).clamp(0,7);return Card(child:ListTile(leading:const Icon(Icons.delete_outline),title:Text(t.label),subtitle:Text('Se elimina en $days días'),trailing:PopupMenuButton<String>(onSelected:(v)async{if(v=='restore')await s.restoreTrash(t);if(v=='delete')await s.permanentlyDeleteTrash(t);},itemBuilder:(_)=>const[PopupMenuItem(value:'restore',child:Text('Restaurar')),PopupMenuItem(value:'delete',child:Text('Eliminar definitivamente'))])));}).toList()))));}}
+
 class BudgetFlow extends StatefulWidget {
   final BudgetData? existing;
   const BudgetFlow({super.key, this.existing});
@@ -2154,12 +1791,7 @@ class _BudgetFlowState extends State<BudgetFlow> {
     'Limpieza final': false,
   };
 
-  final Map<String, bool> phraseEnabled = {
-    'Este presupuesto es válido por 15 días a partir de la fecha.': true,
-    'Todo trabajo extra fuera del presupuesto se cobrará aparte.': true,
-    'Los materiales serán provistos por el cliente, salvo aclaración.': false,
-  };
-
+  late final Map<String, bool> phraseEnabled;
   late final Map<String, TextEditingController> phraseCtrls;
   late final Map<String, TextEditingController> materialCtrls;
 
@@ -2174,12 +1806,15 @@ class _BudgetFlowState extends State<BudgetFlow> {
   @override
   void initState() {
     super.initState();
-    phraseCtrls = {
-      for (final k in phraseEnabled.keys) k: TextEditingController(text: k),
-    };
+    phraseEnabled = {for (final p in AppStore.instance.budgetPhrases) p: true};
+    phraseCtrls = {for (final k in phraseEnabled.keys) k: TextEditingController(text: k)};
     materialCtrls = {
       for (final k in materialUnits.keys) k: TextEditingController(),
     };
+    if (widget.existing == null && AppStore.instance.budgetDraft != null) {
+      final d=AppStore.instance.budgetDraft!; type=(d['type']??'').toString(); otherType.text=(d['otherType']??'').toString(); clientId=(d['clientId']??'').toString(); clientName.text=(d['clientName']??'').toString(); place.text=(d['place']??'').toString(); area.text=(d['area']??'').toString(); measurementDetail.text=(d['measurementDetail']??'').toString(); manualJobs.text=(d['manualJobs']??'').toString(); extraMaterials.text=(d['extraMaterials']??'').toString(); notes.text=(d['notes']??'').toString(); total.text=(d['total']??'').toString(); sectorPriceTotal=(d['sectorPriceTotal'] as num?)?.toDouble()??0; showCompany=d['showCompany']??true; showLogo=d['showLogo']??true; saveNewClient=d['saveNewClient']??false; step=(d['step'] as num?)?.toInt()??0; final sj=d['selectedJobs']; if(sj is Map){for(final k in selectedJobs.keys){selectedJobs[k]=sj[k]??selectedJobs[k]!;}} final mm=d['materials']; if(mm is Map){for(final e in mm.entries){if(materialCtrls.containsKey(e.key.toString()))materialCtrls[e.key.toString()]!.text=e.value.toString();}}
+    }
+    for(final c in [otherType,clientName,place,area,measurementDetail,manualJobs,extraMaterials,notes,total]){c.addListener(_autosave);}
 
     final b = widget.existing;
     if (b != null) {
@@ -2210,6 +1845,8 @@ class _BudgetFlowState extends State<BudgetFlow> {
       phraseEnabled.updateAll((key, value) => false);
     }
   }
+
+  void _autosave(){if(widget.existing!=null)return;AppStore.instance.saveBudgetDraft({'type':type,'otherType':otherType.text,'clientId':clientId,'clientName':clientName.text,'place':place.text,'area':area.text,'measurementDetail':measurementDetail.text,'manualJobs':manualJobs.text,'extraMaterials':extraMaterials.text,'notes':notes.text,'total':total.text,'sectorPriceTotal':sectorPriceTotal,'showCompany':showCompany,'showLogo':showLogo,'saveNewClient':saveNewClient,'step':step,'selectedJobs':selectedJobs,'materials':{for(final e in materialCtrls.entries)e.key:e.value.text}});}
 
   String get workType => type == 'Otro' ? otherType.text.trim() : type;
   double get areaValue => double.tryParse(area.text.replaceAll(',', '.')) ?? 0;
@@ -2292,6 +1929,7 @@ class _BudgetFlowState extends State<BudgetFlow> {
         await s.save();
       }
     }
+    _autosave();
     if (step < 7) setState(() => step++);
   }
 
@@ -2319,7 +1957,7 @@ class _BudgetFlowState extends State<BudgetFlow> {
                   subtitle: t != 'Otro' && (AppStore.instance.profile.prices[t] ?? 0) > 0
                       ? Text('\$${AppStore.instance.profile.prices[t]!.toStringAsFixed(0)} /m²')
                       : null,
-                  onChanged: (v) => setState(() => type = v ?? ''),
+                  onChanged: (v) { setState(() => type = v ?? ''); _autosave(); },
                 )),
             if (type == 'Otro')
               TextField(
@@ -2481,7 +2119,7 @@ class _BudgetFlowState extends State<BudgetFlow> {
                   value: selectedJobs[k],
                   title: Text(k),
                   controlAffinity: ListTileControlAffinity.leading,
-                  onChanged: (v) => setState(() => selectedJobs[k] = v ?? false),
+                  onChanged: (v) { setState(() => selectedJobs[k] = v ?? false); _autosave(); },
                 )),
           ],
         );
@@ -2526,13 +2164,13 @@ class _BudgetFlowState extends State<BudgetFlow> {
             const SizedBox(height: 8),
             SwitchListTile(
               value: showCompany,
-              onChanged: (v) => setState(() => showCompany = v),
+              onChanged: (v) { setState(() => showCompany = v); _autosave(); },
               title: const Text('Nombre de la empresa'),
               subtitle: Text(p.companyName.isEmpty ? 'Sin completar' : p.companyName),
             ),
             SwitchListTile(
               value: showLogo,
-              onChanged: (v) => setState(() => showLogo = v),
+              onChanged: (v) { setState(() => showLogo = v); _autosave(); },
               title: const Text('Logo de la empresa'),
               subtitle: Text(p.logoBase64.isEmpty ? 'Sin logo cargado' : 'Logo cargado'),
             ),
@@ -2657,6 +2295,8 @@ class _BudgetFlowState extends State<BudgetFlow> {
       for (final e in materialCtrls.entries)
         if (e.value.text.trim().isNotEmpty) e.key: e.value.text.trim(),
     };
+    AppStore.instance.budgetPhrases = phraseCtrls.values.map((c)=>c.text.trim()).where((x)=>x.isNotEmpty).toList();
+    await AppStore.instance.save();
     final phraseText = phraseEnabled.entries
         .where((e) => e.value)
         .map((e) => phraseCtrls[e.key]!.text.trim())
@@ -2690,6 +2330,7 @@ class _BudgetFlowState extends State<BudgetFlow> {
       showLogo: showLogo,
     );
     await s.upsertBudget(b);
+    await s.clearBudgetDraft();
 
     if (!mounted) return;
     await Navigator.push(
@@ -2712,7 +2353,14 @@ class BudgetsScreen extends StatelessWidget {
           ? const Center(child: Text('Todavía no hay presupuestos.'))
           : ListView(
               padding: const EdgeInsets.all(20),
-              children: s.budgets.map((b) => Card(
+              children: [
+                Card(child: ListTile(
+                  leading: const Icon(Icons.schedule),
+                  title: Text('${s.budgets.where((x) => x.status == 'Pendiente').length} pendientes de ${s.budgets.length}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                  subtitle: Text('${s.budgets.where((x) => x.status == 'Aceptado').length} aceptados · ${s.budgets.where((x) => x.status == 'Rechazado').length} rechazados'),
+                )),
+                const SizedBox(height: 8),
+                ...s.budgets.map((b) => Card(
                     child: ListTile(
                       leading: const Icon(Icons.description_outlined),
                       title: Text(
@@ -2736,6 +2384,7 @@ class BudgetsScreen extends StatelessWidget {
                       onTap: () => budgetActions(context, b),
                     ),
                   )).toList(),
+              ],
             ),
     ));
   }
@@ -2759,7 +2408,7 @@ void budgetActions(BuildContext context, BudgetData b) {
     ListTile(leading: const Icon(Icons.schedule), title: const Text('Pendiente'), trailing: b.status == 'Pendiente' ? const Icon(Icons.check) : null, onTap: () => setBudgetStatus(ctx, b, 'Pendiente')),
     ListTile(leading: const Icon(Icons.check_circle_outline), title: const Text('Aceptado'), trailing: b.status == 'Aceptado' ? const Icon(Icons.check) : null, onTap: () => setBudgetStatus(ctx, b, 'Aceptado')),
     ListTile(leading: const Icon(Icons.cancel_outlined), title: const Text('Rechazado'), trailing: b.status == 'Rechazado' ? const Icon(Icons.check) : null, onTap: () => setBudgetStatus(ctx, b, 'Rechazado')),
-    ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Eliminar'), onTap: () async { Navigator.pop(ctx); final ok = await showDialog<bool>(context: context, builder: (d) => AlertDialog(title: const Text('Eliminar presupuesto'), content: Text('¿Eliminar ${b.number}?'), actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancelar')), FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Eliminar'))])); if (ok == true) await AppStore.instance.deleteBudget(b.id); }),
+    ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Eliminar'), onTap: () async { Navigator.pop(ctx); final ok = await showDialog<bool>(context: context, builder: (d) => AlertDialog(title: const Text('Eliminar presupuesto'), content: Text('¿Eliminar ${b.number}?'), actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancelar')), FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Eliminar'))])); if (ok == true) await AppStore.instance.moveBudgetToTrash(b); }),
   ])));
 }
 Future<void> setBudgetStatus(BuildContext ctx, BudgetData b, String status) async { b.status = status; await AppStore.instance.save(); if (ctx.mounted) Navigator.pop(ctx); }
@@ -2812,23 +2461,35 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.fromLTRB(36, 36, 36, 120),
+        margin: const pw.EdgeInsets.fromLTRB(36, 36, 36, 118),
         footer: (ctx) {
           if (b.notes.isEmpty || ctx.pageNumber != ctx.pagesCount) {
             return pw.SizedBox();
           }
+
           return pw.Container(
+            width: double.infinity,
             padding: const pw.EdgeInsets.only(top: 8),
             decoration: pw.BoxDecoration(
               border: pw.Border(
-                top: pw.BorderSide(color: PdfColor.fromHex('#D7EAF4'), width: 1),
+                top: pw.BorderSide(
+                  color: PdfColor.fromHex('#D7EAF4'),
+                  width: 1,
+                ),
               ),
             ),
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                section('ACLARACIONES', blue),
-                pw.SizedBox(height: 4),
+                pw.Text(
+                  'ACLARACIONES',
+                  style: pw.TextStyle(
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                    color: blue,
+                  ),
+                ),
+                pw.SizedBox(height: 5),
                 ...b.notes
                     .split('\n')
                     .where((e) => e.trim().isNotEmpty)
@@ -2888,20 +2549,11 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
             ],
           ),
           pw.SizedBox(height: 10),
-          pw.Divider(color: blue),
-          pw.Row(children: [
-            pw.Expanded(child: info('CLIENTE', b.clientName)),
-            pw.SizedBox(width: 12),
-            pw.Expanded(child: info('OBRA', b.place)),
-          ]),
+          pw.Container(height:3,color:blue),
+          info('CLIENTE', b.clientName),
           pw.SizedBox(height: 14),
           section('TIPO DE TRABAJO', blue),
           pw.Text(b.workType.isEmpty ? '-' : b.workType),
-          if (b.area > 0) ...[
-            pw.SizedBox(height: 12),
-            section('SUPERFICIE', blue),
-            pw.Text('${b.area.toStringAsFixed(2)} m²'),
-          ],
           if (b.jobs.isNotEmpty) ...[
             pw.SizedBox(height: 16),
             section('TRABAJOS A REALIZAR', blue),
@@ -2935,17 +2587,21 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
                 style: pw.TextStyle(
                   fontSize: 20,
                   fontWeight: pw.FontWeight.bold,
-                  color: blue,
+                  color: PdfColors.black,
                 ),
               ),
             ]),
           ),
-          pw.SizedBox(height: 16),
+          pw.SizedBox(height: 24),
           pw.Align(
             alignment: pw.Alignment.center,
             child: pw.Text(
-              'Generado con PintaM2',
-              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey),
+              'PintaM²',
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColor.fromHex('#B6BDC5'),
+              ),
             ),
           ),
         ],
@@ -2963,20 +2619,31 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
       }[k] ??
       '';
 
-  static pw.Widget info(String a, String b) => pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text(a, style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
-          pw.Text(
-            b.isEmpty ? '-' : b,
-            style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
-          ),
-        ],
+  static pw.Widget info(String a, String b) => pw.Container(
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(
+          color: PdfColor.fromHex('#F7FAFC'),
+          border: pw.Border.all(color: PdfColor.fromHex('#E4EAF2')),
+          borderRadius: pw.BorderRadius.circular(6),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(a, style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+            pw.SizedBox(height: 3),
+            pw.Text(b.isEmpty ? '-' : b, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+          ],
+        ),
       );
 
-  static pw.Widget section(String s, PdfColor c) => pw.Text(
-        s,
-        style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: c),
+  static pw.Widget section(String s, PdfColor c) => pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: pw.BoxDecoration(
+          color: PdfColor.fromHex('#EEF8FC'),
+          borderRadius: pw.BorderRadius.circular(5),
+        ),
+        child: pw.Text(s, style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: c)),
       );
 
   static String _date() {
@@ -3013,166 +2680,28 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
       ),
       body: Column(children: [
         Expanded(
-          child: InteractiveViewer(
-            minScale: 1,
-            maxScale: 4,
-            boundaryMargin: const EdgeInsets.all(80),
-            child: PdfPreview(
-              build: (_) => buildPdf(),
-              canChangePageFormat: false,
-              canChangeOrientation: false,
-              canDebug: false,
-              pdfFileName: 'PintaM2_${b.number}.pdf',
-            ),
-          ),
+          child: InteractiveViewer(minScale:1,maxScale:4,child:PdfPreview(
+            build: (_) => buildPdf(),
+            canChangePageFormat: false,
+            canChangeOrientation: false,
+            canDebug: false,
+            pdfFileName: 'PintaM2_${b.number}.pdf',
+          )),
         ),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      pintaGoHome?.call();
-                      Navigator.of(context).popUntil((route) => route.isFirst);
-                    },
-                    icon: const Icon(Icons.home_outlined),
-                    label: const Text('Volver al inicio'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () async => Printing.sharePdf(
-                      bytes: await buildPdf(),
-                      filename: 'PintaM2_${b.number}.pdf',
-                    ),
-                    icon: const Icon(Icons.share_outlined),
-                    label: const Text('Compartir PDF'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        SafeArea(top:false,child:Padding(padding:const EdgeInsets.all(12),child:Row(children:[Expanded(child:OutlinedButton.icon(onPressed:(){pintaGoHome?.call();Navigator.of(context).popUntil((r)=>r.isFirst);},icon:const Icon(Icons.home_outlined),label:const Text('Volver al inicio'))),const SizedBox(width:8),Expanded(child:FilledButton.icon(onPressed:()async=>Printing.sharePdf(bytes:await buildPdf(),filename:'PintaM2_${b.number}.pdf'),icon:const Icon(Icons.share_outlined),label:const Text('Compartir PDF')))]))),
       ]),
     );
   }
 }
 
-class MoreScreen extends StatelessWidget {
-  final ValueChanged<ThemeMode> onThemeChanged;
-  const MoreScreen({super.key, required this.onThemeChanged});
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: const BrandAppBar(),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.manage_accounts_outlined),
-                title: const Text('Editar datos'),
-                subtitle: const Text('Usuario, empresa, logo y precios'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const EditProfileScreen()),
-                ),
-              ),
-            ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.palette_outlined),
-                title: const Text('Colores / códigos'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ColorsScreen()),
-                ),
-              ),
-            ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.calculate_outlined),
-                title: const Text('Calculadora'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AdvancedCalculatorScreen()),
-                ),
-              ),
-            ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.history_outlined),
-                title: const Text('Historial'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const HistoryScreen()),
-                ),
-              ),
-            ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.backup_outlined),
-                title: const Text('Exportar / guardar datos'),
-                subtitle: const Text('Copia de seguridad para cambiar de celular'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const BackupScreen()),
-                ),
-              ),
-            ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.palette_outlined),
-                title: const Text('Apariencia'),
-                onTap: () => showModalBottomSheet(
-                  context: context,
-                  builder: (ctx) => SafeArea(
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      ListTile(
-                        title: const Text('Seguir el sistema'),
-                        onTap: () {
-                          onThemeChanged(ThemeMode.system);
-                          Navigator.pop(ctx);
-                        },
-                      ),
-                      ListTile(
-                        title: const Text('Claro'),
-                        onTap: () {
-                          onThemeChanged(ThemeMode.light);
-                          Navigator.pop(ctx);
-                        },
-                      ),
-                      ListTile(
-                        title: const Text('Oscuro'),
-                        onTap: () {
-                          onThemeChanged(ThemeMode.dark);
-                          Navigator.pop(ctx);
-                        },
-                      ),
-                    ]),
-                  ),
-                ),
-              ),
-            ),
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.info_outline),
-                title: Text('Acerca de PintaM²'),
-                subtitle: Text('Versión de prueba 0.8'),
-              ),
-            ),
-          ],
-        ),
-      );
+class MoreScreen extends StatelessWidget{
+  final ValueChanged<ThemeMode> onThemeChanged; const MoreScreen({super.key,required this.onThemeChanged});
+  @override Widget build(BuildContext context)=>Scaffold(appBar:const BrandAppBar(),body:ListView(padding:const EdgeInsets.all(20),children:[
+    Card(child:ListTile(leading:const Icon(Icons.manage_accounts_outlined),title:const Text('Editar datos'),subtitle:const Text('Usuario, empresa, logo y precios'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const EditProfileScreen())))),
+    Card(child:ListTile(leading:const Icon(Icons.backup_outlined),title:const Text('Exportar / guardar datos'),subtitle:const Text('Copia de seguridad para cambiar de celular'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const BackupScreen())))),
+    Card(child:ListTile(leading:const Icon(Icons.palette_outlined),title:const Text('Apariencia'),onTap:()=>showModalBottomSheet(context:context,builder:(ctx)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[ListTile(title:const Text('Seguir el sistema'),onTap:(){onThemeChanged(ThemeMode.system);Navigator.pop(ctx);}),ListTile(title:const Text('Claro'),onTap:(){onThemeChanged(ThemeMode.light);Navigator.pop(ctx);}),ListTile(title:const Text('Oscuro'),onTap:(){onThemeChanged(ThemeMode.dark);Navigator.pop(ctx);})]))))),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('Acerca de PintaM²'),subtitle:Text('Versión de prueba 0.11'))),
+  ]));
 }
 
 class BackupScreen extends StatefulWidget {
