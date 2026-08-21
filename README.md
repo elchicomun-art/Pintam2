@@ -10,3 +10,7 @@ Se mantiene la base de la v0.11. Cambios:
 - Se mantiene pendiente para la próxima iteración cualquier ajuste visual adicional del ícono adaptativo.
 
 Nota: los tipos de trabajo Pintura interior, Pintura exterior y Pintura rápida se conservan en la configuración de precios y presupuestos; no se usan como materiales.
+
+
+## v0.12.1
+- Corrección de sintaxis en el bloque de Aclaraciones del PDF que impedía compilar.

@@ -1996,11 +1996,12 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
                   pw.Align(
                     alignment: pw.Alignment.center,
                     child: pw.Text(
-                    'ACLARACIONES',
-                    style: pw.TextStyle(
-                      fontSize: 9,
-                      fontWeight: pw.FontWeight.bold,
-                      color: blue,
+                      'ACLARACIONES',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        color: blue,
+                      ),
                     ),
                   ),
                   pw.SizedBox(height: 6),
