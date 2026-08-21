@@ -36,3 +36,18 @@ Cambios aplicados sin quitar funciones de v0.11:
 - Se conservan el zoom del presupuesto y Volver al inicio.
 - Se conserva exactamente el logo/icono Android de v0.11.
 - Se conservan Papelera, Turnos, DNI/CUIL, Colores/Códigos, backups y todo lo existente en v0.11.
+
+
+## v0.12.1
+- Los tipos de trabajo agregados por el usuario en Editar datos / precios aparecen automáticamente en la calculadora de materiales/trabajos.
+- A cada trabajo se le puede asignar un rendimiento y guardarlo.
+- El rendimiento queda disponible en los próximos usos de la calculadora.
+- Se conserva íntegramente la base v0.12 (derivada de la v0.11 aprobada).
+
+
+## v0.12.2
+- Corrección exclusiva del icono Android.
+- Se conserva exactamente `assets/app_icon.png` de la base aprobada.
+- El icono se genera ahora con `flutter_launcher_icons`.
+- Se generan iconos normales y adaptive icons para Android moderno.
+- No se modifica ninguna función ni pantalla de v0.12.1.

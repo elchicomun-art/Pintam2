@@ -1069,26 +1069,48 @@ class _MaterialsCalculatorScreenState
   Future<void> _loadMaterials() async {
     final sp = await SharedPreferences.getInstance();
     final raw = sp.getString(_storageKey);
-    if (raw == null) return;
 
-    try {
-      final decoded = Map<String, dynamic>.from(jsonDecode(raw));
-      final loaded = <String, double>{};
-      for (final e in decoded.entries) {
-        loaded[e.key] = (e.value as num).toDouble();
-      }
+    final merged = <String, double>{
+      'Látex interior': 10,
+      'Látex exterior': 10,
+      'Esmalte sintético': 12,
+      'Barniz': 12,
+      'Membrana líquida': 4,
+    };
 
-      if (loaded.isNotEmpty && mounted) {
-        setState(() {
-          materials = loaded;
-          if (!materials.containsKey(material)) {
-            material = materials.keys.first;
-          }
-          yieldCtrl.text =
-              materials[material]!.toStringAsFixed(0);
-        });
+    // Todo trabajo agregado en Editar datos / precios queda disponible
+    // automáticamente acá para asignarle y guardar su rendimiento.
+    for (final workName in AppStore.instance.profile.prices.keys) {
+      if (workName.trim().isNotEmpty) {
+        merged.putIfAbsent(workName.trim(), () => 10);
       }
-    } catch (_) {}
+    }
+
+    if (raw != null) {
+      try {
+        final decoded = Map<String, dynamic>.from(jsonDecode(raw));
+        for (final e in decoded.entries) {
+          merged[e.key] = (e.value as num).toDouble();
+        }
+      } catch (_) {}
+    }
+
+    if (mounted) {
+      setState(() {
+        materials = merged;
+        if (!materials.containsKey(material)) {
+          material = materials.keys.first;
+        }
+        yieldCtrl.text = materials[material]!.toStringAsFixed(
+          materials[material] == materials[material]!.truncateToDouble()
+              ? 0
+              : 2,
+        );
+      });
+    }
+
+    // Guarda también los trabajos nuevos que se sincronizaron.
+    await _saveMaterials();
   }
 
   Future<void> _saveMaterials() async {
@@ -1267,7 +1289,8 @@ class _MaterialsCalculatorScreenState
           const SizedBox(height: 6),
           const Text(
             'Fórmula: m² × manos ÷ rendimiento. '
-            'Los materiales nuevos y los rendimientos editados quedan guardados.',
+            'Los materiales nuevos y los rendimientos editados quedan guardados. '
+            'También aparecen automáticamente los tipos de trabajo que agregues en Editar datos.',
           ),
           const SizedBox(height: 16),
           Row(
