@@ -1,16 +1,13 @@
-# PintaM² v0.12 - prueba
+# PintaM² v0.13 - prueba
 
-Se mantiene la base de la v0.11. Cambios:
+Base: PintaM2_v0.12.2_ICONO_ANDROID.
 
-- Calculadora: botón Borrar 1 elimina dígito por dígito; Limpiar borra todo.
-- Calculadora más clara y mantiene M² rápido.
-- Nuevo presupuesto / Trabajos: agrega Arreglos de humedad.
-- Materiales aproximados: agrega Lijas.
-- PDF: tipografía general un poco más grande, títulos más destacados y aclaraciones centradas dentro del recuadro final.
-- Se mantiene pendiente para la próxima iteración cualquier ajuste visual adicional del ícono adaptativo.
+Cambios realizados únicamente sobre esta base:
+- Calculadora tradicional: la tecla ⌫ borra número por número, incluso después de un resultado.
+- Calculadora de materiales: se excluyen Pintura interior, Pintura exterior y Pintura rápida.
+- Nuevo presupuesto / Trabajos: se agrega Arreglos de humedad.
+- Nuevo presupuesto / Materiales: se agrega Lijas.
+- PDF final: letra un poco más grande, títulos más destacados y aclaraciones centradas.
+- Android: se vuelve a generar y verificar el icono PintaM² para reemplazar definitivamente el icono de Flutter; nombre visible PintaM².
 
-Nota: los tipos de trabajo Pintura interior, Pintura exterior y Pintura rápida se conservan en la configuración de precios y presupuestos; no se usan como materiales.
-
-
-## v0.12.1
-- Corrección de sintaxis en el bloque de Aclaraciones del PDF que impedía compilar.
+No se eliminan ni cambian las demás funciones de la base.
