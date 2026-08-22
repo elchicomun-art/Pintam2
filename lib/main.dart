@@ -74,6 +74,7 @@ class ClientData {
   String phone;
   String dni;
   String cuil;
+  String description;
   List<String> works;
 
   ClientData({
@@ -83,23 +84,37 @@ class ClientData {
     this.phone = '',
     this.dni = '',
     this.cuil = '',
+    this.description = '',
     List<String>? works,
   }) : works = works ?? [];
 
   Map<String, dynamic> toJson() => {
-        'id': id, 'name': name, 'address': address, 'phone': phone,
-        'dni': dni, 'cuil': cuil, 'works': works,
+        'id': id,
+        'name': name,
+        'address': address,
+        'phone': phone,
+        'dni': dni,
+        'cuil': cuil,
+        'description': description,
+        'works': works,
       };
 
   factory ClientData.fromJson(Map<String, dynamic> json) {
     final address = (json['address'] ?? '').toString();
     final raw = json['works'];
-    final works = raw is List ? raw.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList() : <String>[];
+    final works = raw is List
+        ? raw.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList()
+        : <String>[];
     if (works.isEmpty && address.trim().isNotEmpty) works.add(address.trim());
     return ClientData(
-      id: (json['id'] ?? '').toString(), name: (json['name'] ?? '').toString(),
-      address: address, phone: (json['phone'] ?? '').toString(),
-      dni: (json['dni'] ?? '').toString(), cuil: (json['cuil'] ?? '').toString(), works: works,
+      id: (json['id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      address: address,
+      phone: (json['phone'] ?? '').toString(),
+      dni: (json['dni'] ?? '').toString(),
+      cuil: (json['cuil'] ?? '').toString(),
+      description: (json['description'] ?? '').toString(),
+      works: works,
     );
   }
 }
@@ -245,6 +260,43 @@ class AppointmentData {
     dateTime:(j['dateTime']??DateTime.now().toIso8601String()).toString(), reminder:j['reminder']??false);
 }
 
+
+class NoteData {
+  String id;
+  String title;
+  String text;
+  String clientId;
+  String createdAt;
+  String updatedAt;
+
+  NoteData({
+    required this.id,
+    required this.title,
+    required this.text,
+    this.clientId = '',
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'text': text,
+        'clientId': clientId,
+        'createdAt': createdAt,
+        'updatedAt': updatedAt,
+      };
+
+  factory NoteData.fromJson(Map<String, dynamic> json) => NoteData(
+        id: (json['id'] ?? '').toString(),
+        title: (json['title'] ?? '').toString(),
+        text: (json['text'] ?? '').toString(),
+        clientId: (json['clientId'] ?? '').toString(),
+        createdAt: (json['createdAt'] ?? DateTime.now().toIso8601String()).toString(),
+        updatedAt: (json['updatedAt'] ?? DateTime.now().toIso8601String()).toString(),
+      );
+}
+
 class TrashData {
   String id;
   String type;
@@ -262,7 +314,7 @@ class AppStore extends ChangeNotifier {
   static final AppStore instance = AppStore._();
 
   static const _setupKey='pintam2_setup_v07', _profileKey='pintam2_profile_v07', _clientsKey='pintam2_clients_v07', _colorsKey='pintam2_colors_v07', _budgetsKey='pintam2_budgets_v07';
-  static const _appointmentsKey='pintam2_appointments_v010', _trashKey='pintam2_trash_v010', _phrasesKey='pintam2_phrases_v010', _draftKey='pintam2_budget_draft_v010';
+  static const _appointmentsKey='pintam2_appointments_v010', _trashKey='pintam2_trash_v010', _phrasesKey='pintam2_phrases_v010', _draftKey='pintam2_budget_draft_v010', _notesKey='pintam2_notes_v014';
 
   bool setupDone=false;
   UserProfile profile=UserProfile();
@@ -270,6 +322,7 @@ class AppStore extends ChangeNotifier {
   final List<ColorData> colors=[];
   final List<BudgetData> budgets=[];
   final List<AppointmentData> appointments=[];
+  final List<NoteData> notes=[];
   final List<TrashData> trash=[];
   List<String> budgetPhrases=[
     'Este presupuesto es válido por 15 días a partir de la fecha.',
@@ -285,6 +338,7 @@ class AppStore extends ChangeNotifier {
     try{final r=sp.getString(_colorsKey);if(r!=null){colors..clear()..addAll((jsonDecode(r)as List).map((e)=>ColorData.fromJson(Map<String,dynamic>.from(e))));}}catch(_){}
     try{final r=sp.getString(_budgetsKey);if(r!=null){budgets..clear()..addAll((jsonDecode(r)as List).map((e)=>BudgetData.fromJson(Map<String,dynamic>.from(e))));}}catch(_){}
     try{final r=sp.getString(_appointmentsKey);if(r!=null){appointments..clear()..addAll((jsonDecode(r)as List).map((e)=>AppointmentData.fromJson(Map<String,dynamic>.from(e))));}}catch(_){}
+    try{final r=sp.getString(_notesKey);if(r!=null){notes..clear()..addAll((jsonDecode(r)as List).map((e)=>NoteData.fromJson(Map<String,dynamic>.from(e))));}}catch(_){}
     try{final r=sp.getString(_trashKey);if(r!=null){trash..clear()..addAll((jsonDecode(r)as List).map((e)=>TrashData.fromJson(Map<String,dynamic>.from(e))));}}catch(_){}
     try{final r=sp.getString(_phrasesKey);if(r!=null){final x=(jsonDecode(r)as List).map((e)=>e.toString()).toList();if(x.isNotEmpty)budgetPhrases=x;}}catch(_){}
     try{final r=sp.getString(_draftKey);if(r!=null)budgetDraft=Map<String,dynamic>.from(jsonDecode(r));}catch(_){}
@@ -296,6 +350,7 @@ class AppStore extends ChangeNotifier {
     await sp.setBool(_setupKey,setupDone); await sp.setString(_profileKey,jsonEncode(profile.toJson()));
     await sp.setString(_clientsKey,jsonEncode(clients.map((e)=>e.toJson()).toList())); await sp.setString(_colorsKey,jsonEncode(colors.map((e)=>e.toJson()).toList()));
     await sp.setString(_budgetsKey,jsonEncode(budgets.map((e)=>e.toJson()).toList())); await sp.setString(_appointmentsKey,jsonEncode(appointments.map((e)=>e.toJson()).toList()));
+    await sp.setString(_notesKey,jsonEncode(notes.map((e)=>e.toJson()).toList()));
     await sp.setString(_trashKey,jsonEncode(trash.map((e)=>e.toJson()).toList())); await sp.setString(_phrasesKey,jsonEncode(budgetPhrases)); notifyListeners();
   }
 
@@ -314,8 +369,8 @@ class AppStore extends ChangeNotifier {
   Future<void> emptyTrash()async{for(final t in List<TrashData>.from(trash)){if(t.type=='client'){final id=(t.payload['id']??'').toString();colors.removeWhere((c)=>c.clientId==id);}}trash.clear();await save();}
   Future<void> cleanExpiredTrash()async{final limit=DateTime.now().subtract(const Duration(days:7));final expired=trash.where((t){final d=DateTime.tryParse(t.deletedAt);return d!=null&&d.isBefore(limit);}).toList();if(expired.isEmpty)return;for(final t in expired){if(t.type=='client'){final id=(t.payload['id']??'').toString();colors.removeWhere((c)=>c.clientId==id);}trash.removeWhere((x)=>x.id==t.id);}await save();}
 
-  String backupJson()=>jsonEncode({'version':10,'profile':profile.toJson(),'clients':clients.map((e)=>e.toJson()).toList(),'colors':colors.map((e)=>e.toJson()).toList(),'budgets':budgets.map((e)=>e.toJson()).toList(),'appointments':appointments.map((e)=>e.toJson()).toList(),'phrases':budgetPhrases,'trash':trash.map((e)=>e.toJson()).toList()});
-  Future<void> restoreBackup(String raw)async{final d=Map<String,dynamic>.from(jsonDecode(raw));if(d['profile']is Map)profile=UserProfile.fromJson(Map<String,dynamic>.from(d['profile']));clients..clear()..addAll(((d['clients']as List?)??const[]).map((e)=>ClientData.fromJson(Map<String,dynamic>.from(e))));colors..clear()..addAll(((d['colors']as List?)??const[]).map((e)=>ColorData.fromJson(Map<String,dynamic>.from(e))));budgets..clear()..addAll(((d['budgets']as List?)??const[]).map((e)=>BudgetData.fromJson(Map<String,dynamic>.from(e))));appointments..clear()..addAll(((d['appointments']as List?)??const[]).map((e)=>AppointmentData.fromJson(Map<String,dynamic>.from(e))));if(d['phrases']is List)budgetPhrases=(d['phrases']as List).map((e)=>e.toString()).toList();trash..clear()..addAll(((d['trash']as List?)??const[]).map((e)=>TrashData.fromJson(Map<String,dynamic>.from(e))));setupDone=true;await save();}
+  String backupJson()=>jsonEncode({'version':14,'profile':profile.toJson(),'clients':clients.map((e)=>e.toJson()).toList(),'colors':colors.map((e)=>e.toJson()).toList(),'budgets':budgets.map((e)=>e.toJson()).toList(),'appointments':appointments.map((e)=>e.toJson()).toList(),'notes':notes.map((e)=>e.toJson()).toList(),'phrases':budgetPhrases,'trash':trash.map((e)=>e.toJson()).toList()});
+  Future<void> restoreBackup(String raw)async{final d=Map<String,dynamic>.from(jsonDecode(raw));if(d['profile']is Map)profile=UserProfile.fromJson(Map<String,dynamic>.from(d['profile']));clients..clear()..addAll(((d['clients']as List?)??const[]).map((e)=>ClientData.fromJson(Map<String,dynamic>.from(e))));colors..clear()..addAll(((d['colors']as List?)??const[]).map((e)=>ColorData.fromJson(Map<String,dynamic>.from(e))));budgets..clear()..addAll(((d['budgets']as List?)??const[]).map((e)=>BudgetData.fromJson(Map<String,dynamic>.from(e))));appointments..clear()..addAll(((d['appointments']as List?)??const[]).map((e)=>AppointmentData.fromJson(Map<String,dynamic>.from(e))));notes..clear()..addAll(((d['notes']as List?)??const[]).map((e)=>NoteData.fromJson(Map<String,dynamic>.from(e))));if(d['phrases']is List)budgetPhrases=(d['phrases']as List).map((e)=>e.toString()).toList();trash..clear()..addAll(((d['trash']as List?)??const[]).map((e)=>TrashData.fromJson(Map<String,dynamic>.from(e))));setupDone=true;await save();}
 }
 
 class PintaM2App extends StatefulWidget {
@@ -328,7 +383,7 @@ class _PintaM2AppState extends State<PintaM2App> {
   ThemeMode mode = ThemeMode.system;
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF5BC0EB);
+    const seed = Color(0xFF38BDF8);
     return MaterialApp(
       title: 'PintaM²',
       debugShowCheckedModeBanner: false,
@@ -346,7 +401,29 @@ class _PintaM2AppState extends State<PintaM2App> {
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(color: Color(0xFFE4EAF2)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(color: Color(0xFFE4EAF2)),
+          ),
+        ),
+        cardTheme: CardThemeData(
+          elevation: 0,
+          margin: const EdgeInsets.only(bottom: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Color(0xFFE7ECF3)),
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+          ),
         ),
       ),
       darkTheme: ThemeData(
@@ -475,16 +552,89 @@ class _SetupScreenState extends State<SetupScreen> {
 class MainShell extends StatefulWidget {
   final ValueChanged<ThemeMode> onThemeChanged;
   const MainShell({super.key, required this.onThemeChanged});
-  @override State<MainShell> createState()=>_MainShellState();
+  @override
+  State<MainShell> createState() => _MainShellState();
 }
-class _MainShellState extends State<MainShell>{
-  int index=0; DateTime? lastBack;
-  @override void initState(){super.initState();pintaGoHome=(){if(mounted)setState(()=>index=0);};}
-  @override void dispose(){pintaGoHome=null;super.dispose();}
-  @override Widget build(BuildContext context)=>PopScope(canPop:false,onPopInvokedWithResult:(didPop,result){if(didPop)return;if(index!=0){setState(()=>index=0);return;}final n=DateTime.now();if(lastBack!=null&&n.difference(lastBack!)<const Duration(seconds:2)){SystemNavigator.pop();}else{lastBack=n;ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Presioná atrás otra vez para salir de PintaM²')));}},child:Scaffold(
-    body:IndexedStack(index:index,children:[HomeScreen(onTab:(i)=>setState(()=>index=i)),const ClientsScreen(),const BudgetsScreen(),MoreScreen(onThemeChanged:widget.onThemeChanged)]),
-    bottomNavigationBar:NavigationBar(selectedIndex:index,onDestinationSelected:(i)=>setState(()=>index=i),destinations:const[
-      NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home),label:'Inicio'),NavigationDestination(icon:Icon(Icons.people_outline),selectedIcon:Icon(Icons.people),label:'Clientes'),NavigationDestination(icon:Icon(Icons.description_outlined),selectedIcon:Icon(Icons.description),label:'Presupuestos'),NavigationDestination(icon:Icon(Icons.more_horiz),label:'Más')]),));
+
+class _MainShellState extends State<MainShell> {
+  int index = 0;
+  DateTime? lastBack;
+
+  @override
+  void initState() {
+    super.initState();
+    pintaGoHome = () {
+      if (mounted) setState(() => index = 0);
+    };
+  }
+
+  @override
+  void dispose() {
+    pintaGoHome = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          if (index != 0) {
+            setState(() => index = 0);
+            return;
+          }
+          final n = DateTime.now();
+          if (lastBack != null &&
+              n.difference(lastBack!) < const Duration(seconds: 2)) {
+            SystemNavigator.pop();
+          } else {
+            lastBack = n;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Presioná atrás otra vez para salir de PintaM²'),
+              ),
+            );
+          }
+        },
+        child: Scaffold(
+          body: IndexedStack(
+            index: index,
+            children: [
+              HomeScreen(onTab: (i) => setState(() => index = i)),
+              const ClientsScreen(),
+              const NotesScreen(),
+              MoreScreen(onThemeChanged: widget.onThemeChanged),
+            ],
+          ),
+          bottomNavigationBar: NavigationBar(
+            height: 72,
+            selectedIndex: index,
+            onDestinationSelected: (i) => setState(() => index = i),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home_rounded),
+                label: 'Inicio',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.people_outline),
+                selectedIcon: Icon(Icons.people_rounded),
+                label: 'Clientes',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.note_alt_outlined),
+                selectedIcon: Icon(Icons.note_alt_rounded),
+                label: 'Notas',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.more_horiz),
+                selectedIcon: Icon(Icons.more_horiz_rounded),
+                label: 'Más',
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 class BrandAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -537,19 +687,259 @@ class BrandAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-class HomeScreen extends StatelessWidget{
-  final ValueChanged<int> onTab; const HomeScreen({super.key,required this.onTab});
-  @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__) {final pending=s.budgets.where((b)=>b.status=='Pendiente').length;final now=DateTime.now();final upcoming=s.appointments.where((a){final d=DateTime.tryParse(a.dateTime);return d!=null&&d.isAfter(now)&&d.isBefore(now.add(const Duration(days:7)));}).length;return Scaffold(appBar:const BrandAppBar(),body:ListView(padding:const EdgeInsets.all(20),children:[
-    Text(s.profile.userName.isEmpty?'¡Buen día! 👋':'¡Buen día, ${s.profile.userName}! 👋',style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800)),const SizedBox(height:18),
-    FilledButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const BudgetFlow())),icon:const Icon(Icons.add),label:const Text('Nuevo presupuesto'),style:FilledButton.styleFrom(minimumSize:const Size.fromHeight(58))),const SizedBox(height:14),
-    _HomeCard(Icons.people_outline,'Clientes','${s.clients.length} registrados',()=>onTab(1)),_HomeCard(Icons.description_outlined,'Presupuestos','$pending pendientes de ${s.budgets.length}',()=>onTab(2)),
-    _HomeCard(Icons.palette_outlined,'Colores / códigos','${s.colors.length} guardados',()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const ColorsScreen()))),
-    _HomeCard(Icons.calculate_outlined,'Calculadora','Sectores, paredes y calculadora rápida',()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const AdvancedCalculatorScreen()))),
-    _HomeCard(Icons.history_outlined,'Historial','Estados y ganancias por mes',()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const HistoryScreen()))),
-    _HomeCard(Icons.calendar_month_outlined,'Turnos, calendario y recordatorios','$upcoming próximos 7 días',()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const CalendarScreen()))),
-    _HomeCard(Icons.delete_outline,'Papelera','${s.trash.length} elementos · 7 días',()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const TrashScreen()))),]));});}
+class HomeScreen extends StatelessWidget {
+  final ValueChanged<int> onTab;
+  const HomeScreen({super.key, required this.onTab});
+
+  AppointmentData? _nextAppointment(AppStore s) {
+    final now = DateTime.now();
+    final future = s.appointments.where((a) {
+      final d = DateTime.tryParse(a.dateTime);
+      return d != null && !d.isBefore(now);
+    }).toList()
+      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    return future.isEmpty ? null : future.first;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStore.instance;
+    return AnimatedBuilder(
+      animation: s,
+      builder: (_, __) {
+        final pending = s.budgets.where((b) => b.status == 'Pendiente').length;
+        final next = _nextAppointment(s);
+
+        return Scaffold(
+          appBar: const BrandAppBar(),
+          body: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 30),
+            children: [
+              Text(
+                s.profile.userName.isEmpty
+                    ? '¡Buen día! 👋'
+                    : '¡Buen día, ${s.profile.userName}! 👋',
+                style: const TextStyle(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Todo lo importante de tu trabajo, en un solo lugar.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BudgetFlow()),
+                ),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text(
+                  'Nuevo presupuesto',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                ),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(60),
+                ),
+              ),
+              if (next != null) ...[
+                const SizedBox(height: 14),
+                _NextAppointmentCard(
+                  appointment: next,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CalendarScreen()),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              _HomeCard(
+                Icons.people_alt_outlined,
+                'Clientes',
+                '${s.clients.length} registrados',
+                () => onTab(1),
+                const Color(0xFF3B82F6),
+              ),
+              _HomeCard(
+                Icons.description_outlined,
+                'Presupuestos',
+                '$pending pendientes de ${s.budgets.length}',
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BudgetsScreen()),
+                ),
+                const Color(0xFF8B5CF6),
+              ),
+              _HomeCard(
+                Icons.palette_outlined,
+                'Colores / códigos',
+                '${s.colors.length} guardados',
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ColorsScreen()),
+                ),
+                const Color(0xFFEC4899),
+              ),
+              _HomeCard(
+                Icons.calculate_outlined,
+                'Calculadora',
+                'Sectores, paredes y cálculo rápido',
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AdvancedCalculatorScreen()),
+                ),
+                const Color(0xFF10B981),
+              ),
+              _HomeCard(
+                Icons.history_outlined,
+                'Historial',
+                'Estados y ganancias por mes',
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                ),
+                const Color(0xFFF59E0B),
+              ),
+              _HomeCard(
+                Icons.calendar_month_outlined,
+                'Turnos, calendario y recordatorios',
+                next == null ? 'Sin próximos turnos' : 'Próximo turno disponible',
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CalendarScreen()),
+                ),
+                const Color(0xFF06B6D4),
+              ),
+              _HomeCard(
+                Icons.delete_outline,
+                'Papelera',
+                '${s.trash.length} elementos · 7 días',
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const TrashScreen()),
+                ),
+                const Color(0xFFEF4444),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
-class _HomeCard extends StatelessWidget{final IconData icon;final String title,subtitle;final VoidCallback tap;const _HomeCard(this.icon,this.title,this.subtitle,this.tap);@override Widget build(BuildContext context)=>Card(child:ListTile(onTap:tap,leading:Icon(icon,color:Theme.of(context).colorScheme.primary),title:Text(title,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text(subtitle),trailing:const Icon(Icons.chevron_right)));}
+
+class _NextAppointmentCard extends StatelessWidget {
+  final AppointmentData appointment;
+  final VoidCallback onTap;
+  const _NextAppointmentCard({
+    required this.appointment,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final d = DateTime.tryParse(appointment.dateTime) ?? DateTime.now();
+    final date =
+        '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')} · '
+        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+    return Card(
+      color: Theme.of(context).colorScheme.primaryContainer.withOpacity(.55),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Icon(
+                Icons.event_available_rounded,
+                color: Theme.of(context).colorScheme.onPrimary,
+              ),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Próximo turno',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  Text(
+                    appointment.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    [
+                      date,
+                      if (appointment.client.isNotEmpty) appointment.client,
+                    ].join(' · '),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback tap;
+  final Color accent;
+
+  const _HomeCard(
+    this.icon,
+    this.title,
+    this.subtitle,
+    this.tap,
+    this.accent,
+  );
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: ListTile(
+          onTap: tap,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          leading: Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: accent.withOpacity(.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: accent, size: 25),
+          ),
+          title: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          subtitle: Text(subtitle),
+          trailing: Icon(Icons.chevron_right_rounded, color: accent),
+        ),
+      );
+}
 
 class ClientsScreen extends StatefulWidget{
   const ClientsScreen({super.key}); @override State<ClientsScreen> createState()=>_ClientsScreenState();
@@ -620,11 +1010,11 @@ class _ClientsScreenState extends State<ClientsScreen>{String q='';
       }
     }
   }
-  static void showEditor(BuildContext context,{ClientData? client}){final n=TextEditingController(text:client?.name??''),p=TextEditingController(text:client?.phone??''),dni=TextEditingController(text:client?.dni??''),cuil=TextEditingController(text:client?.cuil??''),work=TextEditingController(text:client==null?'':(client.works.isNotEmpty?client.works.first:client.address));showModalBottomSheet(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>Padding(padding:EdgeInsets.fromLTRB(20,10,20,20+MediaQuery.of(ctx).viewInsets.bottom),child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[Text(client==null?'Nuevo cliente':'Editar cliente',style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800)),const SizedBox(height:14),TextField(controller:n,decoration:const InputDecoration(labelText:'Nombre')),const SizedBox(height:10),TextField(controller:p,keyboardType:TextInputType.phone,decoration:InputDecoration(labelText:'Teléfono',suffixIcon:IconButton(onPressed:()=>pickContact(ctx,n,p),icon:const Icon(Icons.contacts_outlined),tooltip:'Elegir desde agenda'))),const SizedBox(height:10),TextField(controller:dni,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'DNI')),const SizedBox(height:10),TextField(controller:cuil,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'CUIL')),const SizedBox(height:10),TextField(controller:work,decoration:const InputDecoration(labelText:'Primer trabajo / lugar',hintText:'Casa, oficinas, local...')),const SizedBox(height:16),FilledButton(onPressed:()async{if(n.text.trim().isEmpty)return;final s=AppStore.instance;if(client==null){final w=work.text.trim();s.clients.add(ClientData(id:DateTime.now().microsecondsSinceEpoch.toString(),name:n.text.trim(),phone:p.text.trim(),dni:dni.text.trim(),cuil:cuil.text.trim(),address:w,works:w.isEmpty?[]:[w]));}else{client.name=n.text.trim();client.phone=p.text.trim();client.dni=dni.text.trim();client.cuil=cuil.text.trim();final w=work.text.trim();if(client.works.isEmpty&&w.isNotEmpty)client.works.add(w);else if(client.works.isNotEmpty&&w.isNotEmpty)client.works[0]=w;client.address=client.works.isEmpty?'':client.works.first;}await s.save();if(ctx.mounted)Navigator.pop(ctx);},child:const Text('Guardar'))]))));}
+  static void showEditor(BuildContext context,{ClientData? client}){final n=TextEditingController(text:client?.name??''),p=TextEditingController(text:client?.phone??''),dni=TextEditingController(text:client?.dni??''),cuil=TextEditingController(text:client?.cuil??''),desc=TextEditingController(text:client?.description??''),work=TextEditingController(text:client==null?'':(client.works.isNotEmpty?client.works.first:client.address));showModalBottomSheet(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>Padding(padding:EdgeInsets.fromLTRB(20,10,20,20+MediaQuery.of(ctx).viewInsets.bottom),child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[Text(client==null?'Nuevo cliente':'Editar cliente',style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800)),const SizedBox(height:14),TextField(controller:n,decoration:const InputDecoration(labelText:'Nombre')),const SizedBox(height:10),TextField(controller:p,keyboardType:TextInputType.phone,decoration:InputDecoration(labelText:'Teléfono',suffixIcon:IconButton(onPressed:()=>pickContact(ctx,n,p),icon:const Icon(Icons.contacts_outlined),tooltip:'Elegir desde agenda'))),const SizedBox(height:10),TextField(controller:dni,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'DNI')),const SizedBox(height:10),TextField(controller:cuil,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'CUIL')),const SizedBox(height:10),TextField(controller:desc,minLines:3,maxLines:5,decoration:const InputDecoration(labelText:'Descripción / notas del cliente',hintText:'Ej.: Le gustan los colores oscuros')),const SizedBox(height:10),TextField(controller:work,decoration:const InputDecoration(labelText:'Primer trabajo / lugar',hintText:'Casa, oficinas, local...')),const SizedBox(height:16),FilledButton(onPressed:()async{if(n.text.trim().isEmpty)return;final s=AppStore.instance;if(client==null){final w=work.text.trim();s.clients.add(ClientData(id:DateTime.now().microsecondsSinceEpoch.toString(),name:n.text.trim(),phone:p.text.trim(),dni:dni.text.trim(),cuil:cuil.text.trim(),description:desc.text.trim(),address:w,works:w.isEmpty?[]:[w]));}else{client.name=n.text.trim();client.phone=p.text.trim();client.dni=dni.text.trim();client.cuil=cuil.text.trim();client.description=desc.text.trim();final w=work.text.trim();if(client.works.isEmpty&&w.isNotEmpty)client.works.add(w);else if(client.works.isNotEmpty&&w.isNotEmpty)client.works[0]=w;client.address=client.works.isEmpty?'':client.works.first;}await s.save();if(ctx.mounted)Navigator.pop(ctx);},child:const Text('Guardar'))]))));}
 }
 
 class ClientDetailScreen extends StatelessWidget{final String clientId;const ClientDetailScreen({super.key,required this.clientId});
-  @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final c=s.clients.where((x)=>x.id==clientId).cast<ClientData?>().firstOrNull;if(c==null)return Scaffold(appBar:AppBar(),body:const Center(child:Text('Cliente eliminado')));return Scaffold(appBar:AppBar(title:Text(c.name),actions:[IconButton(onPressed:()=>ClientsScreen.editClient(context,client:c),icon:const Icon(Icons.edit_outlined)),IconButton(onPressed:()async{final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Enviar a papelera'),content:Text('¿Mover a ${c.name} a la papelera?'),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Mover'))]));if(ok==true){await s.moveClientToTrash(c);if(context.mounted)Navigator.pop(context);}},icon:const Icon(Icons.delete_outline))]),floatingActionButton:FloatingActionButton.extended(onPressed:()async{final t=TextEditingController();final v=await showDialog<String>(context:context,builder:(d)=>AlertDialog(title:const Text('Agregar trabajo / lugar'),content:TextField(controller:t,decoration:const InputDecoration(labelText:'Casa, oficinas, quincho...')),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,t.text.trim()),child:const Text('Agregar'))]));if(v!=null&&v.isNotEmpty){c.works.add(v);c.address=c.works.first;await s.save();}},icon:const Icon(Icons.add_home_work_outlined),label:const Text('Agregar trabajo')),body:ListView(padding:const EdgeInsets.fromLTRB(20,20,20,100),children:[if(c.phone.isNotEmpty)ListTile(leading:const Icon(Icons.phone_outlined),title:Text(c.phone)),if(c.dni.isNotEmpty)ListTile(leading:const Icon(Icons.badge_outlined),title:Text('DNI ${c.dni}')),if(c.cuil.isNotEmpty)ListTile(leading:const Icon(Icons.receipt_long_outlined),title:Text('CUIL ${c.cuil}')),const SizedBox(height:10),const Text('Trabajos / lugares',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800)),...c.works.map((w){final count=s.colors.where((x)=>x.clientId==c.id&&(x.workName==w||(x.workName.isEmpty&&c.works.first==w))).length;return Card(child:ListTile(leading:const Icon(Icons.home_work_outlined),title:Text(w,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text('$count colores/códigos'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>WorkColorScreen(clientId:c.id,workName:w)))));})]));});}
+  @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final c=s.clients.where((x)=>x.id==clientId).cast<ClientData?>().firstOrNull;if(c==null)return Scaffold(appBar:AppBar(),body:const Center(child:Text('Cliente eliminado')));return Scaffold(appBar:AppBar(title:Text(c.name),actions:[IconButton(onPressed:()=>ClientsScreen.editClient(context,client:c),icon:const Icon(Icons.edit_outlined)),IconButton(onPressed:()async{final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Enviar a papelera'),content:Text('¿Mover a ${c.name} a la papelera?'),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Mover'))]));if(ok==true){await s.moveClientToTrash(c);if(context.mounted)Navigator.pop(context);}},icon:const Icon(Icons.delete_outline))]),floatingActionButton:FloatingActionButton.extended(onPressed:()async{final t=TextEditingController();final v=await showDialog<String>(context:context,builder:(d)=>AlertDialog(title:const Text('Agregar trabajo / lugar'),content:TextField(controller:t,decoration:const InputDecoration(labelText:'Casa, oficinas, quincho...')),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,t.text.trim()),child:const Text('Agregar'))]));if(v!=null&&v.isNotEmpty){c.works.add(v);c.address=c.works.first;await s.save();}},icon:const Icon(Icons.add_home_work_outlined),label:const Text('Agregar trabajo')),body:ListView(padding:const EdgeInsets.fromLTRB(20,20,20,100),children:[if(c.phone.isNotEmpty)ListTile(leading:const Icon(Icons.phone_outlined),title:Text(c.phone)),if(c.dni.isNotEmpty)ListTile(leading:const Icon(Icons.badge_outlined),title:Text('DNI ${c.dni}')),if(c.cuil.isNotEmpty)ListTile(leading:const Icon(Icons.receipt_long_outlined),title:Text('CUIL ${c.cuil}')),if(c.description.isNotEmpty)Card(color:Theme.of(context).colorScheme.secondaryContainer.withOpacity(.45),child:Padding(padding:const EdgeInsets.all(14),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(Icons.sticky_note_2_outlined,color:Theme.of(context).colorScheme.secondary),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('Descripción del cliente',style:TextStyle(fontWeight:FontWeight.w800)),const SizedBox(height:4),Text(c.description)]))]))),const SizedBox(height:10),const Text('Trabajos / lugares',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800)),...c.works.map((w){final count=s.colors.where((x)=>x.clientId==c.id&&(x.workName==w||(x.workName.isEmpty&&c.works.first==w))).length;return Card(child:ListTile(leading:const Icon(Icons.home_work_outlined),title:Text(w,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text('$count colores/códigos'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>WorkColorScreen(clientId:c.id,workName:w)))));})]));});}
 }
 
 class WorkColorScreen extends StatelessWidget{final String clientId,workName;const WorkColorScreen({super.key,required this.clientId,required this.workName});
@@ -1787,7 +2177,20 @@ class _AdvancedCalculatorScreenState extends State<AdvancedCalculatorScreen> {
 }
 
 class CalendarScreen extends StatefulWidget{const CalendarScreen({super.key});@override State<CalendarScreen> createState()=>_CalendarScreenState();}
-class _CalendarScreenState extends State<CalendarScreen>{DateTime selected=DateTime.now();bool same(DateTime a,DateTime b)=>a.year==b.year&&a.month==b.month&&a.day==b.day;@override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final list=s.appointments.where((a){final d=DateTime.tryParse(a.dateTime);return d!=null&&same(d,selected);}).toList()..sort((a,b)=>a.dateTime.compareTo(b.dateTime));return Scaffold(appBar:AppBar(title:const Text('Turnos y recordatorios')),floatingActionButton:FloatingActionButton.extended(onPressed:()=>editAppointment(context,initialDate:selected),icon:const Icon(Icons.add),label:const Text('Nuevo turno')),body:ListView(padding:const EdgeInsets.fromLTRB(16,12,16,100),children:[Card(child:CalendarDatePicker(initialDate:selected,firstDate:DateTime(2024),lastDate:DateTime(2035),onDateChanged:(d)=>setState(()=>selected=d))),const SizedBox(height:10),Text('Turnos del ${selected.day}/${selected.month}/${selected.year}',style:const TextStyle(fontSize:18,fontWeight:FontWeight.w800)),if(list.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(18),child:Text('No hay turnos para este día.'))),...list.map((a){final d=DateTime.tryParse(a.dateTime)!;return Card(child:ListTile(leading:Icon(a.reminder?Icons.notifications_active_outlined:Icons.event_outlined),title:Text(a.title),subtitle:Text('${d.hour.toString().padLeft(2,'0')}:${d.minute.toString().padLeft(2,'0')}${a.client.isEmpty?'':' · ${a.client}'}${a.reminder?' · recordatorio':''}'),trailing:const Icon(Icons.chevron_right),onTap:()=>editAppointment(context,appointment:a)));})]));});}}
+class _CalendarScreenState extends State<CalendarScreen>{DateTime selected=DateTime.now();bool same(DateTime a,DateTime b)=>a.year==b.year&&a.month==b.month&&a.day==b.day;@override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final list=s.appointments.where((a){final d=DateTime.tryParse(a.dateTime);return d!=null&&same(d,selected);}).toList()..sort((a,b)=>a.dateTime.compareTo(b.dateTime));return Scaffold(appBar:AppBar(title:const Text('Turnos y recordatorios')),floatingActionButton:FloatingActionButton.extended(onPressed:()=>editAppointment(context,initialDate:selected),icon:const Icon(Icons.add),label:const Text('Nuevo turno')),body:ListView(padding:const EdgeInsets.fromLTRB(16,12,16,100),children:[
+      Builder(builder:(context){
+        final now=DateTime.now();
+        final next=s.appointments.where((a){final d=DateTime.tryParse(a.dateTime);return d!=null&&!d.isBefore(now);}).toList()..sort((a,b)=>a.dateTime.compareTo(b.dateTime));
+        if(next.isEmpty)return const SizedBox.shrink();
+        final a=next.first;
+        final d=DateTime.tryParse(a.dateTime)??now;
+        return Card(color:Theme.of(context).colorScheme.primaryContainer.withOpacity(.55),child:ListTile(
+          leading:Container(width:46,height:46,decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary,borderRadius:BorderRadius.circular(14)),child:Icon(Icons.event_available_rounded,color:Theme.of(context).colorScheme.onPrimary)),
+          title:const Text('Próximo turno',style:TextStyle(fontWeight:FontWeight.w900)),
+          subtitle:Text('${a.title} · ${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')} ${d.hour.toString().padLeft(2,'0')}:${d.minute.toString().padLeft(2,'0')}'),
+        ));
+      }),
+      Card(child:CalendarDatePicker(initialDate:selected,firstDate:DateTime(2024),lastDate:DateTime(2035),onDateChanged:(d)=>setState(()=>selected=d))),const SizedBox(height:10),Text('Turnos del ${selected.day}/${selected.month}/${selected.year}',style:const TextStyle(fontSize:18,fontWeight:FontWeight.w800)),if(list.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(18),child:Text('No hay turnos para este día.'))),...list.map((a){final d=DateTime.tryParse(a.dateTime)!;return Card(child:ListTile(leading:Icon(a.reminder?Icons.notifications_active_outlined:Icons.event_outlined),title:Text(a.title),subtitle:Text('${d.hour.toString().padLeft(2,'0')}:${d.minute.toString().padLeft(2,'0')}${a.client.isEmpty?'':' · ${a.client}'}${a.reminder?' · recordatorio':''}'),trailing:const Icon(Icons.chevron_right),onTap:()=>editAppointment(context,appointment:a)));})]));});}}
 Future<void> editAppointment(BuildContext context,{AppointmentData? appointment,DateTime? initialDate})async{final title=TextEditingController(text:appointment?.title??''),client=TextEditingController(text:appointment?.client??''),notes=TextEditingController(text:appointment?.notes??'');DateTime dt=DateTime.tryParse(appointment?.dateTime??'')??DateTime((initialDate??DateTime.now()).year,(initialDate??DateTime.now()).month,(initialDate??DateTime.now()).day,9);bool rem=appointment?.reminder??false;await showModalBottomSheet(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>StatefulBuilder(builder:(ctx,setL)=>Padding(padding:EdgeInsets.fromLTRB(20,10,20,20+MediaQuery.of(ctx).viewInsets.bottom),child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[Text(appointment==null?'Nuevo turno':'Editar turno',style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800)),const SizedBox(height:12),TextField(controller:title,decoration:const InputDecoration(labelText:'Título')),const SizedBox(height:8),TextField(controller:client,decoration:const InputDecoration(labelText:'Cliente (opcional)')),ListTile(leading:const Icon(Icons.calendar_today_outlined),title:Text('${dt.day}/${dt.month}/${dt.year}'),onTap:()async{final d=await showDatePicker(context:ctx,firstDate:DateTime(2024),lastDate:DateTime(2035),initialDate:dt);if(d!=null)setL(()=>dt=DateTime(d.year,d.month,d.day,dt.hour,dt.minute));}),ListTile(leading:const Icon(Icons.access_time),title:Text('${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}'),onTap:()async{final t=await showTimePicker(context:ctx,initialTime:TimeOfDay.fromDateTime(dt));if(t!=null)setL(()=>dt=DateTime(dt.year,dt.month,dt.day,t.hour,t.minute));}),SwitchListTile(value:rem,onChanged:(v)=>setL(()=>rem=v),title:const Text('Recordatorio'),subtitle:const Text('Queda marcado dentro de PintaM²')),TextField(controller:notes,minLines:2,maxLines:5,decoration:const InputDecoration(labelText:'Notas')),const SizedBox(height:12),FilledButton(onPressed:()async{if(title.text.trim().isEmpty)return;final s=AppStore.instance;if(appointment==null)s.appointments.add(AppointmentData(id:DateTime.now().microsecondsSinceEpoch.toString(),title:title.text.trim(),client:client.text.trim(),notes:notes.text.trim(),dateTime:dt.toIso8601String(),reminder:rem));else{appointment.title=title.text.trim();appointment.client=client.text.trim();appointment.notes=notes.text.trim();appointment.dateTime=dt.toIso8601String();appointment.reminder=rem;}await s.save();if(ctx.mounted)Navigator.pop(ctx);},child:const Text('Guardar turno')),if(appointment!=null)TextButton.icon(onPressed:()async{await AppStore.instance.moveAppointmentToTrash(appointment);if(ctx.mounted)Navigator.pop(ctx);},icon:const Icon(Icons.delete_outline),label:const Text('Mover a papelera'))])))));}
 
 class TrashScreen extends StatelessWidget{const TrashScreen({super.key});@override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__)=>(Scaffold(appBar:AppBar(title:const Text('Papelera'),actions:[TextButton(onPressed:s.trash.isEmpty?null:()async{final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Vaciar papelera'),content:const Text('Se eliminará todo definitivamente.'),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Vaciar'))]));if(ok==true)await s.emptyTrash();},child:const Text('Vaciar'))]),body:s.trash.isEmpty?const Center(child:Text('La papelera está vacía.')):ListView(padding:const EdgeInsets.all(20),children:s.trash.map((t){final d=DateTime.tryParse(t.deletedAt)??DateTime.now();final days=(7-DateTime.now().difference(d).inDays).clamp(0,7);return Card(child:ListTile(leading:const Icon(Icons.delete_outline),title:Text(t.label),subtitle:Text('Se elimina en $days días'),trailing:PopupMenuButton<String>(onSelected:(v)async{if(v=='restore')await s.restoreTrash(t);if(v=='delete')await s.permanentlyDeleteTrash(t);},itemBuilder:(_)=>const[PopupMenuItem(value:'restore',child:Text('Restaurar')),PopupMenuItem(value:'delete',child:Text('Eliminar definitivamente'))])));}).toList()))));}}
@@ -2746,13 +3149,298 @@ class _BudgetPreviewScreenState extends State<BudgetPreviewScreen> {
   }
 }
 
+
+class NotesScreen extends StatefulWidget {
+  const NotesScreen({super.key});
+  @override
+  State<NotesScreen> createState() => _NotesScreenState();
+}
+
+class _NotesScreenState extends State<NotesScreen> {
+  String query = '';
+
+  String dateText(String iso) {
+    final d = DateTime.tryParse(iso) ?? DateTime.now();
+    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStore.instance;
+    return AnimatedBuilder(
+      animation: s,
+      builder: (_, __) {
+        final q = query.trim().toLowerCase();
+        final list = s.notes.where((n) {
+          final client = s.clients
+              .where((c) => c.id == n.clientId)
+              .cast<ClientData?>()
+              .firstOrNull;
+          return q.isEmpty ||
+              n.title.toLowerCase().contains(q) ||
+              n.text.toLowerCase().contains(q) ||
+              (client?.name.toLowerCase().contains(q) ?? false);
+        }).toList()
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+        return Scaffold(
+          appBar: const BrandAppBar(),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () => _editNote(context),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Nueva nota'),
+          ),
+          body: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
+            children: [
+              TextField(
+                onChanged: (v) => setState(() => query = v),
+                decoration: const InputDecoration(
+                  hintText: 'Buscar notas...',
+                  prefixIcon: Icon(Icons.search),
+                ),
+              ),
+              const SizedBox(height: 14),
+              if (list.isEmpty)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(26),
+                    child: Column(children: [
+                      Icon(
+                        Icons.note_alt_outlined,
+                        size: 46,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Todavía no hay notas',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Guardá medidas rápidas, materiales pendientes o recordatorios del trabajo.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ]),
+                  ),
+                ),
+              ...list.map((n) {
+                final client = s.clients
+                    .where((c) => c.id == n.clientId)
+                    .cast<ClientData?>()
+                    .firstOrNull;
+                return Card(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => _editNote(context, note: n),
+                    child: Padding(
+                      padding: const EdgeInsets.all(15),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF59E0B).withOpacity(.13),
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            child: const Icon(
+                              Icons.sticky_note_2_outlined,
+                              color: Color(0xFFF59E0B),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  n.title.isEmpty ? 'Nota rápida' : n.title,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                if (n.text.isNotEmpty) ...[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    n.text,
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                                const SizedBox(height: 7),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  children: [
+                                    _NoteChip(
+                                      icon: Icons.calendar_today_outlined,
+                                      text: dateText(n.updatedAt),
+                                    ),
+                                    if (client != null)
+                                      _NoteChip(
+                                        icon: Icons.person_outline,
+                                        text: client.name,
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right_rounded),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _editNote(BuildContext context, {NoteData? note}) async {
+    final s = AppStore.instance;
+    final title = TextEditingController(text: note?.title ?? '');
+    final text = TextEditingController(text: note?.text ?? '');
+    String clientId = note?.clientId ?? '';
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            18,
+            8,
+            18,
+            18 + MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  note == null ? 'Nueva nota' : 'Editar nota',
+                  style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: title,
+                  decoration: const InputDecoration(
+                    labelText: 'Título',
+                    hintText: 'Ej.: Comprar pintura',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: text,
+                  minLines: 5,
+                  maxLines: 10,
+                  decoration: const InputDecoration(
+                    labelText: 'Nota',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value: clientId.isEmpty ? null : clientId,
+                  decoration: const InputDecoration(
+                    labelText: 'Cliente asociado (opcional)',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                  items: s.clients
+                      .map(
+                        (c) => DropdownMenuItem(
+                          value: c.id,
+                          child: Text(c.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setLocal(() => clientId = v ?? ''),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () async {
+                    if (title.text.trim().isEmpty && text.text.trim().isEmpty) return;
+                    final now = DateTime.now().toIso8601String();
+                    if (note == null) {
+                      s.notes.add(
+                        NoteData(
+                          id: DateTime.now().microsecondsSinceEpoch.toString(),
+                          title: title.text.trim(),
+                          text: text.text.trim(),
+                          clientId: clientId,
+                          createdAt: now,
+                          updatedAt: now,
+                        ),
+                      );
+                    } else {
+                      note.title = title.text.trim();
+                      note.text = text.text.trim();
+                      note.clientId = clientId;
+                      note.updatedAt = now;
+                    }
+                    await s.save();
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Guardar nota'),
+                ),
+                if (note != null)
+                  TextButton.icon(
+                    onPressed: () async {
+                      s.notes.removeWhere((n) => n.id == note.id);
+                      await s.save();
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Eliminar nota'),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NoteChip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _NoteChip({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.7),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13),
+            const SizedBox(width: 4),
+            Text(text, style: const TextStyle(fontSize: 11)),
+          ],
+        ),
+      );
+}
+
 class MoreScreen extends StatelessWidget{
   final ValueChanged<ThemeMode> onThemeChanged; const MoreScreen({super.key,required this.onThemeChanged});
   @override Widget build(BuildContext context)=>Scaffold(appBar:const BrandAppBar(),body:ListView(padding:const EdgeInsets.all(20),children:[
     Card(child:ListTile(leading:const Icon(Icons.manage_accounts_outlined),title:const Text('Editar datos'),subtitle:const Text('Usuario, empresa, logo y precios'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const EditProfileScreen())))),
     Card(child:ListTile(leading:const Icon(Icons.backup_outlined),title:const Text('Exportar / guardar datos'),subtitle:const Text('Copia de seguridad para cambiar de celular'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const BackupScreen())))),
     Card(child:ListTile(leading:const Icon(Icons.palette_outlined),title:const Text('Apariencia'),onTap:()=>showModalBottomSheet(context:context,builder:(ctx)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[ListTile(title:const Text('Seguir el sistema'),onTap:(){onThemeChanged(ThemeMode.system);Navigator.pop(ctx);}),ListTile(title:const Text('Claro'),onTap:(){onThemeChanged(ThemeMode.light);Navigator.pop(ctx);}),ListTile(title:const Text('Oscuro'),onTap:(){onThemeChanged(ThemeMode.dark);Navigator.pop(ctx);})]))))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('Acerca de PintaM²'),subtitle:Text('Versión de prueba 0.11'))),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('Acerca de PintaM²'),subtitle:Text('Versión de prueba 0.14'))),
   ]));
 }
 
