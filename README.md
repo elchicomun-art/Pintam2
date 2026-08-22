@@ -1,24 +1,16 @@
-# PintaM² v0.14 - prueba
+# PintaM² v0.14.1 - ajuste visual
 
-Base oficial: PintaM² v0.13.
+Base funcional: PintaM² v0.14, que a su vez parte de la v0.13 oficial.
 
-Cambios de esta versión:
-- Barra inferior simplificada: Inicio | Clientes | Notas | Más.
-- Nuevo módulo Notas:
-  - crear;
-  - buscar;
-  - editar;
-  - eliminar;
-  - fecha automática;
-  - asociar opcionalmente una nota a un cliente.
-- Cada cliente ahora tiene Descripción / notas del cliente.
-- Turnos:
-  - tarjeta de Próximo turno en Inicio;
-  - próximo turno destacado dentro del calendario.
-- Modernización visual:
-  - tarjetas más redondeadas;
-  - botones más modernos;
-  - iconos con colores suaves por función;
-  - mejor jerarquía visual sin cambiar la estructura funcional de v0.13.
-- La copia de seguridad ahora incluye las Notas.
-- Se mantienen intactas las funciones de presupuestos, colores/códigos, calculadoras, historial, papelera y exportación/importación de datos de la v0.13.
+En esta corrección NO se cambian funciones.
+
+Cambios visuales:
+- Se eliminan los distintos colores de los iconos del Inicio.
+- Todos los accesos vuelven a usar la gama celeste de PintaM².
+- Tarjetas blancas con sombra suave para dar profundidad.
+- Bordes redondeados y aspecto elevado.
+- Botones principales con sombra sutil.
+- Barra inferior con elevación para separarla visualmente del contenido.
+- Notas y descripción del cliente usan la misma identidad visual de PintaM².
+- Se mantienen Inicio | Clientes | Notas | Más.
+- Se mantienen Notas, descripción del cliente y tarjeta de próximo turno.

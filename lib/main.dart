@@ -412,15 +412,19 @@ class _PintaM2AppState extends State<PintaM2App> {
           ),
         ),
         cardTheme: CardThemeData(
-          elevation: 0,
-          margin: const EdgeInsets.only(bottom: 10),
+          elevation: 4,
+          shadowColor: const Color(0x26000000),
+          surfaceTintColor: Colors.white,
+          color: Colors.white,
+          margin: const EdgeInsets.only(bottom: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Color(0xFFE7ECF3)),
           ),
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
+            elevation: 2,
+            shadowColor: const Color(0x22000000),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
           ),
@@ -606,7 +610,10 @@ class _MainShellState extends State<MainShell> {
               MoreScreen(onThemeChanged: widget.onThemeChanged),
             ],
           ),
-          bottomNavigationBar: NavigationBar(
+          bottomNavigationBar: Material(
+            elevation: 10,
+            shadowColor: const Color(0x33000000),
+            child: NavigationBar(
             height: 72,
             selectedIndex: index,
             onDestinationSelected: (i) => setState(() => index = i),
@@ -632,6 +639,7 @@ class _MainShellState extends State<MainShell> {
                 label: 'Más',
               ),
             ],
+            ),
           ),
         ),
       );
@@ -848,7 +856,6 @@ class _NextAppointmentCard extends StatelessWidget {
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
     return Card(
-      color: Theme.of(context).colorScheme.primaryContainer.withOpacity(.55),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
@@ -918,27 +925,56 @@ class _HomeCard extends StatelessWidget {
   );
 
   @override
-  Widget build(BuildContext context) => Card(
-        child: ListTile(
-          onTap: tap,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          leading: Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: accent.withOpacity(.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: accent, size: 25),
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: tap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: primary.withOpacity(.10),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: primary.withOpacity(.12)),
+                ),
+                child: Icon(icon, color: primary, size: 25),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: primary),
+            ],
           ),
-          title: Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
-          subtitle: Text(subtitle),
-          trailing: Icon(Icons.chevron_right_rounded, color: accent),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class ClientsScreen extends StatefulWidget{
@@ -946,7 +982,7 @@ class ClientsScreen extends StatefulWidget{
   static void editClient(BuildContext context,{ClientData? client})=>_ClientsScreenState.showEditor(context,client:client);
 }
 class _ClientsScreenState extends State<ClientsScreen>{String q='';
-  @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final x=q.trim().toLowerCase();final list=s.clients.where((c)=>x.isEmpty||c.name.toLowerCase().contains(x)||c.phone.contains(x)||c.dni.contains(x)||c.cuil.contains(x)||c.works.any((w)=>w.toLowerCase().contains(x))).toList();return Scaffold(appBar:const BrandAppBar(),floatingActionButton:FloatingActionButton.extended(onPressed:()=>showEditor(context),icon:const Icon(Icons.person_add),label:const Text('Nuevo cliente')),body:ListView(padding:const EdgeInsets.fromLTRB(20,20,20,100),children:[TextField(onChanged:(v)=>setState(()=>q=v),decoration:const InputDecoration(hintText:'Buscar cliente...',prefixIcon:Icon(Icons.search))),const SizedBox(height:14),if(list.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(22),child:Text('No hay clientes para mostrar.'))),...list.map((c)=>Card(child:ListTile(leading:CircleAvatar(child:Text(c.name.isEmpty?'?':c.name[0].toUpperCase())),title:Text(c.name,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text(c.works.isEmpty?'Sin trabajos guardados':'${c.works.length} trabajo${c.works.length==1?'':'s'}'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>ClientDetailScreen(clientId:c.id))))))]));});}
+  @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final x=q.trim().toLowerCase();final list=s.clients.where((c)=>x.isEmpty||c.name.toLowerCase().contains(x)||c.phone.contains(x)||c.dni.contains(x)||c.cuil.contains(x)||c.works.any((w)=>w.toLowerCase().contains(x))).toList();return Scaffold(appBar:const BrandAppBar(),floatingActionButton:FloatingActionButton.extended(elevation:5,onPressed:()=>showEditor(context),icon:const Icon(Icons.person_add),label:const Text('Nuevo cliente')),body:ListView(padding:const EdgeInsets.fromLTRB(20,20,20,100),children:[TextField(onChanged:(v)=>setState(()=>q=v),decoration:const InputDecoration(hintText:'Buscar cliente...',prefixIcon:Icon(Icons.search))),const SizedBox(height:14),if(list.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(22),child:Text('No hay clientes para mostrar.'))),...list.map((c)=>Card(child:ListTile(leading:CircleAvatar(child:Text(c.name.isEmpty?'?':c.name[0].toUpperCase())),title:Text(c.name,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text(c.works.isEmpty?'Sin trabajos guardados':'${c.works.length} trabajo${c.works.length==1?'':'s'}'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>ClientDetailScreen(clientId:c.id))))))]));});}
 
   static Future<void> pickContact(
     BuildContext context,
@@ -1014,11 +1050,11 @@ class _ClientsScreenState extends State<ClientsScreen>{String q='';
 }
 
 class ClientDetailScreen extends StatelessWidget{final String clientId;const ClientDetailScreen({super.key,required this.clientId});
-  @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final c=s.clients.where((x)=>x.id==clientId).cast<ClientData?>().firstOrNull;if(c==null)return Scaffold(appBar:AppBar(),body:const Center(child:Text('Cliente eliminado')));return Scaffold(appBar:AppBar(title:Text(c.name),actions:[IconButton(onPressed:()=>ClientsScreen.editClient(context,client:c),icon:const Icon(Icons.edit_outlined)),IconButton(onPressed:()async{final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Enviar a papelera'),content:Text('¿Mover a ${c.name} a la papelera?'),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Mover'))]));if(ok==true){await s.moveClientToTrash(c);if(context.mounted)Navigator.pop(context);}},icon:const Icon(Icons.delete_outline))]),floatingActionButton:FloatingActionButton.extended(onPressed:()async{final t=TextEditingController();final v=await showDialog<String>(context:context,builder:(d)=>AlertDialog(title:const Text('Agregar trabajo / lugar'),content:TextField(controller:t,decoration:const InputDecoration(labelText:'Casa, oficinas, quincho...')),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,t.text.trim()),child:const Text('Agregar'))]));if(v!=null&&v.isNotEmpty){c.works.add(v);c.address=c.works.first;await s.save();}},icon:const Icon(Icons.add_home_work_outlined),label:const Text('Agregar trabajo')),body:ListView(padding:const EdgeInsets.fromLTRB(20,20,20,100),children:[if(c.phone.isNotEmpty)ListTile(leading:const Icon(Icons.phone_outlined),title:Text(c.phone)),if(c.dni.isNotEmpty)ListTile(leading:const Icon(Icons.badge_outlined),title:Text('DNI ${c.dni}')),if(c.cuil.isNotEmpty)ListTile(leading:const Icon(Icons.receipt_long_outlined),title:Text('CUIL ${c.cuil}')),if(c.description.isNotEmpty)Card(color:Theme.of(context).colorScheme.secondaryContainer.withOpacity(.45),child:Padding(padding:const EdgeInsets.all(14),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(Icons.sticky_note_2_outlined,color:Theme.of(context).colorScheme.secondary),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('Descripción del cliente',style:TextStyle(fontWeight:FontWeight.w800)),const SizedBox(height:4),Text(c.description)]))]))),const SizedBox(height:10),const Text('Trabajos / lugares',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800)),...c.works.map((w){final count=s.colors.where((x)=>x.clientId==c.id&&(x.workName==w||(x.workName.isEmpty&&c.works.first==w))).length;return Card(child:ListTile(leading:const Icon(Icons.home_work_outlined),title:Text(w,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text('$count colores/códigos'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>WorkColorScreen(clientId:c.id,workName:w)))));})]));});}
+  @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final c=s.clients.where((x)=>x.id==clientId).cast<ClientData?>().firstOrNull;if(c==null)return Scaffold(appBar:AppBar(),body:const Center(child:Text('Cliente eliminado')));return Scaffold(appBar:AppBar(title:Text(c.name),actions:[IconButton(onPressed:()=>ClientsScreen.editClient(context,client:c),icon:const Icon(Icons.edit_outlined)),IconButton(onPressed:()async{final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Enviar a papelera'),content:Text('¿Mover a ${c.name} a la papelera?'),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Mover'))]));if(ok==true){await s.moveClientToTrash(c);if(context.mounted)Navigator.pop(context);}},icon:const Icon(Icons.delete_outline))]),floatingActionButton:FloatingActionButton.extended(elevation:5,onPressed:()async{final t=TextEditingController();final v=await showDialog<String>(context:context,builder:(d)=>AlertDialog(title:const Text('Agregar trabajo / lugar'),content:TextField(controller:t,decoration:const InputDecoration(labelText:'Casa, oficinas, quincho...')),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(d,t.text.trim()),child:const Text('Agregar'))]));if(v!=null&&v.isNotEmpty){c.works.add(v);c.address=c.works.first;await s.save();}},icon:const Icon(Icons.add_home_work_outlined),label:const Text('Agregar trabajo')),body:ListView(padding:const EdgeInsets.fromLTRB(20,20,20,100),children:[if(c.phone.isNotEmpty)ListTile(leading:const Icon(Icons.phone_outlined),title:Text(c.phone)),if(c.dni.isNotEmpty)ListTile(leading:const Icon(Icons.badge_outlined),title:Text('DNI ${c.dni}')),if(c.cuil.isNotEmpty)ListTile(leading:const Icon(Icons.receipt_long_outlined),title:Text('CUIL ${c.cuil}')),if(c.description.isNotEmpty)Card(child:Padding(padding:const EdgeInsets.all(14),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(Icons.sticky_note_2_outlined,color:Theme.of(context).colorScheme.primary),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('Descripción del cliente',style:TextStyle(fontWeight:FontWeight.w800)),const SizedBox(height:4),Text(c.description)]))]))),const SizedBox(height:10),const Text('Trabajos / lugares',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800)),...c.works.map((w){final count=s.colors.where((x)=>x.clientId==c.id&&(x.workName==w||(x.workName.isEmpty&&c.works.first==w))).length;return Card(child:ListTile(leading:const Icon(Icons.home_work_outlined),title:Text(w,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text('$count colores/códigos'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>WorkColorScreen(clientId:c.id,workName:w)))));})]));});}
 }
 
 class WorkColorScreen extends StatelessWidget{final String clientId,workName;const WorkColorScreen({super.key,required this.clientId,required this.workName});
-  @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final c=s.clients.where((x)=>x.id==clientId).cast<ClientData?>().firstOrNull;final legacyFirst=c!=null&&c.works.isNotEmpty&&c.works.first==workName;final list=s.colors.where((x)=>x.clientId==clientId&&(x.workName==workName||(legacyFirst&&x.workName.isEmpty))).toList();return Scaffold(appBar:AppBar(title:Text(workName)),floatingActionButton:FloatingActionButton.extended(onPressed:()=>editColor(context,clientId:clientId,workName:workName),icon:const Icon(Icons.add),label:const Text('Agregar color')),body:ListView(padding:const EdgeInsets.fromLTRB(20,20,20,100),children:[if(c!=null)Text(c.name,style:TextStyle(color:Theme.of(context).colorScheme.primary,fontWeight:FontWeight.w800)),const SizedBox(height:10),if(list.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(22),child:Text('No hay colores guardados para este trabajo.'))),...list.map((x)=>Card(child:ListTile(leading:const Icon(Icons.palette_outlined),title:Text(x.name.isEmpty?x.code:x.name,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text([if(x.sector.isNotEmpty)'Sector: ${x.sector}',if(x.code.isNotEmpty)'Código: ${x.code}',if(x.preparation.isNotEmpty)x.preparation].join('\n')),onTap:()=>editColor(context,clientId:clientId,workName:workName,color:x))))]));});}
+  @override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final c=s.clients.where((x)=>x.id==clientId).cast<ClientData?>().firstOrNull;final legacyFirst=c!=null&&c.works.isNotEmpty&&c.works.first==workName;final list=s.colors.where((x)=>x.clientId==clientId&&(x.workName==workName||(legacyFirst&&x.workName.isEmpty))).toList();return Scaffold(appBar:AppBar(title:Text(workName)),floatingActionButton:FloatingActionButton.extended(elevation:5,onPressed:()=>editColor(context,clientId:clientId,workName:workName),icon:const Icon(Icons.add),label:const Text('Agregar color')),body:ListView(padding:const EdgeInsets.fromLTRB(20,20,20,100),children:[if(c!=null)Text(c.name,style:TextStyle(color:Theme.of(context).colorScheme.primary,fontWeight:FontWeight.w800)),const SizedBox(height:10),if(list.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(22),child:Text('No hay colores guardados para este trabajo.'))),...list.map((x)=>Card(child:ListTile(leading:const Icon(Icons.palette_outlined),title:Text(x.name.isEmpty?x.code:x.name,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text([if(x.sector.isNotEmpty)'Sector: ${x.sector}',if(x.code.isNotEmpty)'Código: ${x.code}',if(x.preparation.isNotEmpty)x.preparation].join('\n')),onTap:()=>editColor(context,clientId:clientId,workName:workName,color:x))))]));});}
 }
 
 void editColor(BuildContext context,{required String clientId,required String workName,ColorData? color}){final sector=TextEditingController(text:color?.sector??''),n=TextEditingController(text:color?.name??''),cc=TextEditingController(text:color?.code??''),prep=TextEditingController(text:color?.preparation??''),notes=TextEditingController(text:color?.notes??'');showModalBottomSheet(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>Padding(padding:EdgeInsets.fromLTRB(20,10,20,20+MediaQuery.of(ctx).viewInsets.bottom),child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[Text(color==null?'Nuevo color':'Editar color',style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800)),const SizedBox(height:12),TextField(controller:sector,decoration:const InputDecoration(labelText:'Sector')),const SizedBox(height:8),TextField(controller:n,decoration:const InputDecoration(labelText:'Nombre del color')),const SizedBox(height:8),TextField(controller:cc,decoration:const InputDecoration(labelText:'Código')),const SizedBox(height:8),TextField(controller:prep,minLines:3,maxLines:6,decoration:const InputDecoration(labelText:'Preparación / fórmula')),const SizedBox(height:8),TextField(controller:notes,minLines:2,maxLines:4,decoration:const InputDecoration(labelText:'Observaciones')),const SizedBox(height:14),FilledButton(onPressed:()async{if(n.text.trim().isEmpty&&cc.text.trim().isEmpty)return;final s=AppStore.instance;if(color==null)s.colors.add(ColorData(id:DateTime.now().microsecondsSinceEpoch.toString(),clientId:clientId,workName:workName,sector:sector.text.trim(),name:n.text.trim(),code:cc.text.trim(),preparation:prep.text.trim(),notes:notes.text.trim()));else{color.workName=workName;color.sector=sector.text.trim();color.name=n.text.trim();color.code=cc.text.trim();color.preparation=prep.text.trim();color.notes=notes.text.trim();}await s.save();if(ctx.mounted)Navigator.pop(ctx);},child:const Text('Guardar color')),if(color!=null)TextButton.icon(onPressed:()async{await AppStore.instance.moveColorToTrash(color);if(ctx.mounted)Navigator.pop(ctx);},icon:const Icon(Icons.delete_outline),label:const Text('Mover a papelera'))]))));}
@@ -1856,7 +1892,7 @@ class _AdvancedCalculatorScreenState extends State<AdvancedCalculatorScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Calculadora por sectores')),
-        floatingActionButton: FloatingActionButton.extended(
+        floatingActionButton: FloatingActionButton.extended(elevation: 5,
           onPressed: addSector,
           icon: const Icon(Icons.add_home_work_outlined),
           label: const Text('Agregar sector'),
@@ -2177,7 +2213,7 @@ class _AdvancedCalculatorScreenState extends State<AdvancedCalculatorScreen> {
 }
 
 class CalendarScreen extends StatefulWidget{const CalendarScreen({super.key});@override State<CalendarScreen> createState()=>_CalendarScreenState();}
-class _CalendarScreenState extends State<CalendarScreen>{DateTime selected=DateTime.now();bool same(DateTime a,DateTime b)=>a.year==b.year&&a.month==b.month&&a.day==b.day;@override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final list=s.appointments.where((a){final d=DateTime.tryParse(a.dateTime);return d!=null&&same(d,selected);}).toList()..sort((a,b)=>a.dateTime.compareTo(b.dateTime));return Scaffold(appBar:AppBar(title:const Text('Turnos y recordatorios')),floatingActionButton:FloatingActionButton.extended(onPressed:()=>editAppointment(context,initialDate:selected),icon:const Icon(Icons.add),label:const Text('Nuevo turno')),body:ListView(padding:const EdgeInsets.fromLTRB(16,12,16,100),children:[
+class _CalendarScreenState extends State<CalendarScreen>{DateTime selected=DateTime.now();bool same(DateTime a,DateTime b)=>a.year==b.year&&a.month==b.month&&a.day==b.day;@override Widget build(BuildContext context){final s=AppStore.instance;return AnimatedBuilder(animation:s,builder:(_,__){final list=s.appointments.where((a){final d=DateTime.tryParse(a.dateTime);return d!=null&&same(d,selected);}).toList()..sort((a,b)=>a.dateTime.compareTo(b.dateTime));return Scaffold(appBar:AppBar(title:const Text('Turnos y recordatorios')),floatingActionButton:FloatingActionButton.extended(elevation:5,onPressed:()=>editAppointment(context,initialDate:selected),icon:const Icon(Icons.add),label:const Text('Nuevo turno')),body:ListView(padding:const EdgeInsets.fromLTRB(16,12,16,100),children:[
       Builder(builder:(context){
         final now=DateTime.now();
         final next=s.appointments.where((a){final d=DateTime.tryParse(a.dateTime);return d!=null&&!d.isBefore(now);}).toList()..sort((a,b)=>a.dateTime.compareTo(b.dateTime));
@@ -3242,12 +3278,15 @@ class _NotesScreenState extends State<NotesScreen> {
                             width: 42,
                             height: 42,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF59E0B).withOpacity(.13),
+                              color: Theme.of(context).colorScheme.primary.withOpacity(.10),
                               borderRadius: BorderRadius.circular(13),
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.primary.withOpacity(.12),
+                              ),
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.sticky_note_2_outlined,
-                              color: Color(0xFFF59E0B),
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -3440,7 +3479,7 @@ class MoreScreen extends StatelessWidget{
     Card(child:ListTile(leading:const Icon(Icons.manage_accounts_outlined),title:const Text('Editar datos'),subtitle:const Text('Usuario, empresa, logo y precios'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const EditProfileScreen())))),
     Card(child:ListTile(leading:const Icon(Icons.backup_outlined),title:const Text('Exportar / guardar datos'),subtitle:const Text('Copia de seguridad para cambiar de celular'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const BackupScreen())))),
     Card(child:ListTile(leading:const Icon(Icons.palette_outlined),title:const Text('Apariencia'),onTap:()=>showModalBottomSheet(context:context,builder:(ctx)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[ListTile(title:const Text('Seguir el sistema'),onTap:(){onThemeChanged(ThemeMode.system);Navigator.pop(ctx);}),ListTile(title:const Text('Claro'),onTap:(){onThemeChanged(ThemeMode.light);Navigator.pop(ctx);}),ListTile(title:const Text('Oscuro'),onTap:(){onThemeChanged(ThemeMode.dark);Navigator.pop(ctx);})]))))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('Acerca de PintaM²'),subtitle:Text('Versión de prueba 0.14'))),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('Acerca de PintaM²'),subtitle:Text('Versión de prueba 0.14.1'))),
   ]));
 }
 
